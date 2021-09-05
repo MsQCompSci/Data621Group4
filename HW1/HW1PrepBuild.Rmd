@@ -1,0 +1,458 @@
+---
+title: "Data 621 - HW 1"
+author: " Group 4 \n Layla Quinones, Ian Castello, Dmitriy Burtsev & Esteban Aramayo "
+date: "Sept. 26, 2021"
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+#libraries
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(VIM)
+library(naniar)
+library(GGally)
+library(caret)
+library(psych)
+```
+# Data Exploration
+
+```{r}
+#import the data
+urlTraining = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW1/moneyball-training-data.csv"
+
+#get the data
+rawData <- read.csv(urlTraining)
+
+#Display what we imported
+str(rawData)
+
+#From this we can see that there are 2276 observations and 17 variables in total which means we have 1 variable with a unique index, 15 features and 1 target variable to train our model. There is no categorical variables and every variable is an integer. There also appears to be missing values in this data set.
+```
+
+```{r}
+#display summary statistics
+summary(rawData)
+
+#From this we can gain some more insight into each variable specifically. We can see that most variables seem to be close to normally distributed (with a few exceptions) and some have NA values that we should clean up. 
+```
+
+```{r}
+#Using describe we can get even more insight into the shape of each variable
+describe(rawData)
+
+#pitching looks highly skewed
+```
+
+```{r}
+#distribution of each variable
+par(mfrow = c(3,3))
+for(i in 2:ncol(rawData)) {
+  plot(rawData[i], main = colnames(rawData[i]), col = "red")
+}
+
+#shows that pitching variables are skewed and can affect training the model
+
+```
+
+```{r}
+#Lets take a look at missing values (using naniar)
+gg_miss_var(rawData)
+
+#This graph gives us a visual of how many missing values there are n each variable which will determine how or weather we impute, delete those data points or ignore that variable as a whole. From this visualization I can tell that Team_Batting_HBP has mostly NAs and can be deleted. We also know the last three variables on this chart (Target Wins and Index) are not going to be part of the training set because index has no meaning behind it and target_wins is or target variable. 
+```
+
+```{r}
+#make long
+longData <- rawData %>%
+  gather(key = Variable, value = Value)
+
+#Initial boxplot with outliers and NAs omitted
+ggplot(longData, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Moneyball Data Variables", y="Value")
+
+#This visualization gives us an idea of all the outliers we have in each variable but does not give us a good sense of the distribution. We can use the visualization above to interpret shape. From the graph below we see that the variable TEAM_PITCHING_H has the greatest number of outliers which may mean we throw that variable out and not consider it in our model. 
+```
+
+```{r}
+#Boxplot without outliers (ignoring all points greeater than 1500)
+#filtering out target and index
+rawData2 <- longData %>%
+  filter(Variable != "INDEX", Variable != "TARGET_WINS")
+  
+  
+ggplot(rawData2, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+  ylim(0,3000) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_flip()+
+  labs(title="Moneyball Data Variables (ylim = 3000)", y="Number of Employees")
+
+#removed rows are NA values - This visualization gives a better sense of how many outliers there are in each variable which we may or may not have to take into account in our Data Prep for models.
+```
+
+```{r}
+#Lets compare means and medians to get a better sense of skew
+p <-summary(rawData) %>% #gather sumary stats
+  as.data.frame(.) %>% #trurn into DF
+  filter(grepl('Mean|Median', Freq))%>% #grab means and medians
+  separate(Freq, c('Measure', 'Value'))%>% # seperate column into numeric and measure
+  transform(Value = as.numeric(Value))%>% #make sure the value column is numeric
+  select(Var2:Value)
+
+#plot overlapping
+ggplot(p, aes(x=Var2, y=Value))+
+  geom_bar(stat = "identity", aes(fill=Measure))+
+  geom_hline(yintercept=seq(1,1700,100), col="white", lwd=1)+
+  theme_classic()+
+  coord_flip()+
+  scale_fill_discrete(name = "Metric", labels = c("Mean", "Median")) +
+  labs(title="Moneyball Variables", y="Measure")
+
+#This graph gives an even clearer sense of possible skew in data. We see again TEAM_PITCHING_H has a huge skew, TEAM_PITCHING_SO and BB, TEAM_BATTING_SO and BB are also signifcantly skewed. The rest is still hard to tell.
+```
+
+```{r}
+#correlation between variables
+rawTrainX <- rawData %>%
+  select(TEAM_BATTING_H: TEAM_FIELDING_DP)
+
+rawTrainY <- rawData$TARGET_WINS
+
+#correlation matrix (use only complete observations)
+cor(rawTrainX, use = "complete.obs")
+
+#correlation matrix visualization
+ggcorr(rawTrainX)
+
+#check variance (there are none) which is good - we would throw this out if there was one iwth zero variance
+nearZeroVar(rawTrainX)
+
+#There are a number of correlated variables which may affect the model - we want to make sure that colinearity and correlated variables are not going to affect the model we will be using. Here we can see that TEAM_BATTING_H & TEAM_PITCHING H, TEAM_BATTING_HR & TEAM_PITCHING HR, TEAM_BATTING_BB & TEAM_PITCHING BB, TEAM_BATTING_SO & TEAM_PITCHING SO, TEAM_BATTING_HR & TEAM_PITCHING HR are all above a 75% correlation. I would love to play around with including one in each group or maybe developing features that are linear combinations of those variables (PCA maybe).
+```
+
+
+
+```{r}
+#Feature Plot against target variable
+  featurePlot(y = rawTrainY, 
+              x = rawTrainX[1:3],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+
+  featurePlot(y = rawTrainY, 
+              x = rawTrainX[4:6],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+  
+    featurePlot(y = rawTrainY, 
+              x = rawTrainX[7:9],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+    
+      featurePlot(y = rawTrainY, 
+              x = rawTrainX[10:12],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+      
+        featurePlot(y = rawTrainY, 
+              x = rawTrainX[13:15],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+
+#from these plots we can see that we should be mindful of TEAM_PITCHING_ (not so much HR), TEAM_FIELDING_E variables because they are obveously highly skewed and dont follow the trend line much
+```
+
+# Data Preperation
+
+```{r}
+#Take a look at the 4 variables we identified with missing data
+summary(rawTrainX%>% select(TEAM_BATTING_HBP, TEAM_BASERUN_CS, TEAM_BASERUN_SB,TEAM_FIELDING_DP, TEAM_PITCHING_SO, TEAM_BATTING_SO, TEAM_BATTING_HBP))
+
+#Out of the 2276 observations, TEAM_BATTING_HBP has 2085 missing data points
+#since thats most of the observations we will omit this column*****
+
+ggplot(rawTrainX, aes(x=TEAM_BASERUN_CS)) + 
+  geom_histogram(color="black", fill="skyblue") +
+  labs(title = "TEAM_BASERUN_CS", y = "Frequency", x = "Value")+
+  theme(plot.title = element_text(hjust = 0.5))
+#since this variable has a slight skew, I will impute using the kNN (I can also do median)
+
+ggplot(rawTrainX, aes(x=TEAM_FIELDING_DP)) + 
+  geom_histogram(color="black", fill="magenta") +
+  labs(title = "TEAM_FIELDING_DP", y = "Frequency", x = "Value")+
+  theme(plot.title = element_text(hjust = 0.5))
+#since this variable is normally distributed, I will impute using the kNN (I can also do mean)
+
+ggplot(rawTrainX, aes(x=TEAM_PITCHING_SO)) + 
+  geom_histogram(color="black", fill="green") +
+  labs(title = "TEAM_PITCHING_SO", y = "Frequency", x = "Value")+
+  theme(plot.title = element_text(hjust = 0.5))
+#since this variable has a noticable skew, I will impute using the kNN (I can also do median)
+
+
+ggplot(rawTrainX, aes(x=TEAM_BATTING_SO)) + 
+  geom_histogram(color="black", fill="pink") +
+  labs(title = "TEAM_BATTING_SO", y = "Frequency", x = "Value")+
+  theme(plot.title = element_text(hjust = 0.5))
+#since this variable is normally distributed, I will impute using the kNN (I can also do mean)
+
+ggplot(rawTrainX, aes(x=TEAM_BASERUN_SB)) + 
+  geom_histogram(color="black", fill="skyblue") +
+  labs(title = "TEAM_BASERUN_SB", y = "Frequency", x = "Value")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(rawTrainX, aes(x=TEAM_BATTING_HBP)) + 
+  geom_histogram(color="black", fill="skyblue") +
+  labs(title = "TEAM_BATTING_HBP", y = "Frequency", x = "Value")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+
+#KNN is chosen because it will fix all our missing data issues. As part of this preprocessing step I also scale
+#and center each variable
+```
+
+## Set A
+
+- dropped TEAM_BATTING_HBP due to mostly NAs
+- Knn Imputing
+- dropped TEAM_BATTING_HR due to highly correlated
+
+```{r}
+#drop team batting HBPbecause too many missing values
+trainXA <- rawTrainX %>%
+  select(-TEAM_BATTING_HBP)
+
+#IMPUTE USING kNN
+imputeProcessA <- preProcess(trainXA, method = c("knnImpute", "center", "scale"))
+trainXA <- predict(imputeProcessA, trainXA)
+
+#we can see there are no missing values, and all variables are scaled and centered
+summary(trainXA)
+
+#Lets look at some highly correlated variables and drop them
+findCorrelation(cor(trainXA),
+                cutoff = 0.75,
+                verbose = TRUE,
+                names = TRUE)
+
+#Lets drop the highly correlated variable
+trainXA <- trainXA %>%
+  select(-TEAM_BATTING_HR)
+```
+
+```{r}
+#Now we are ready for splitting the data
+set.seed(222)
+#create the train index using a column 
+#Here that is 80/20 split
+trainIndex <- createDataPartition(trainXA$TEAM_BATTING_H, list=FALSE, p = 0.8, times = 1)
+trainXa <- trainXA[trainIndex,]
+testXa <- trainXA[-trainIndex,]
+trainYa <- rawTrainY[trainIndex]
+testYa <- rawTrainY[-trainIndex]
+```
+
+## Set B
+```{r}
+#With PCA & Knn
+
+#Feature Engineer using PCA
+imputeProcessB <- preProcess(rawTrainX, method = c("knnImpute","pca", "center", "scale"))
+trainXb <- predict(imputeProcessB, rawTrainX)
+
+#we can see there are no missing values, and all variables are scaled and centered
+summary(trainXb)
+
+#Lets look at the correlation (none higher than 75)
+ggcorr(trainXb)
+```
+
+```{r}
+#Now we are ready for splitting the data
+set.seed(211)
+#create the train index using a column 
+#Here that is 80/20 split
+trainIndexB <- createDataPartition(trainXb$PC1, p = 0.8, list=FALSE)
+trainXB <- trainXb[trainIndexB,]
+testXb <- trainXb[-trainIndexB,]
+trainYb <- rawTrainY[trainIndexB]
+testYb <- rawTrainY[-trainIndexB]
+```
+
+
+## Set C
+- imuted using mean and median for specific variables
+```{r}
+#Impute using mean and median depending on shape
+trainXc = rawTrainX  %>%
+  mutate(TEAM_BASERUN_CS = ifelse(is.na(rawTrainX$TEAM_BASERUN_CS), median(rawTrainX$TEAM_BASERUN_CS,na.rm=TRUE), rawTrainX$TEAM_BASERUN_CS))%>%
+  mutate(TEAM_BATTING_SO = ifelse(is.na(rawTrainX$TEAM_BATTING_SO), mean(rawTrainX$TEAM_BATTING_SO,na.rm=TRUE), rawTrainX$TEAM_BATTING_SO)) %>%
+  mutate(TEAM_FIELDING_DP = ifelse(is.na(rawTrainX$TEAM_FIELDING_DP), mean(rawTrainX$TEAM_FIELDING_DP,na.rm=TRUE), rawTrainX$TEAM_FIELDING_DP))%>%
+  mutate(TEAM_PITCHING_SO = ifelse(is.na(rawTrainX$TEAM_PITCHING_SO), median(rawTrainX$TEAM_PITCHING_SO,na.rm=TRUE), rawTrainX$TEAM_PITCHING_SO)) %>%
+  mutate(TEAM_BASERUN_SB = ifelse(is.na(rawTrainX$TEAM_BASERUN_SB), median(rawTrainX$TEAM_BASERUN_SB,na.rm=TRUE), rawTrainX$TEAM_BASERUN_SB)) %>%
+  mutate(TEAM_BATTING_HBP = ifelse(is.na(rawTrainX$TEAM_BATTING_HBP), mean(rawTrainX$TEAM_BATTING_HBP,na.rm=TRUE), rawTrainX$TEAM_BATTING_HBP))
+
+#highly correlated variables TEAM_BATTING_HR and TEAM_PITCHN_HR
+findCorrelation(
+  cor(trainXc),
+  cutoff = 0.75,
+  verbose = FALSE,
+  names = TRUE)
+
+#Linear combination of correlated variables
+trainXc = trainXc %>%
+  mutate(Batting_Pitching_HR = TEAM_BATTING_HR + TEAM_PITCHING_HR) %>%
+  select(-TEAM_BATTING_HR,-TEAM_PITCHING_HR)
+```
+
+```{r}
+#Now we are ready for splitting the data
+set.seed(221)
+#create the train index using a column 
+#Here that is 80/20 split
+trainIndexC <- createDataPartition(trainXc$TEAM_BATTING_H, p = 0.8, list=FALSE)
+trainXC <- trainXc[trainIndexC,]
+testXc <- trainXc[-trainIndexC,]
+trainYc <- rawTrainY[trainIndexC]
+testYc <- rawTrainY[-trainIndexC]
+```
+
+# Build Models
+
+```{r}
+#This model using train/test data A 
+#Set up control to be 10-fold-crossvalidation
+ctrl <- trainControl(method = "cv", number = 10) 
+
+#Mulitple linear regression A
+#train the model
+lrOne <- train(trainXa, trainYa, method = "lm", trControl = ctrl)
+
+# something is wrong here
+#make predictions
+predOne <- predict(lrOne$finalModel, testXa)
+
+#accuracy measures
+acc1 <- postResample(pred = predOne, obs = testYa)
+
+#change to df
+predOne <- as.data.frame(predOne)
+#Df for plotting
+plotDataOne <- data.frame(index = seq(1,length(testYa),1), prediction = predOne$predOne, actual = testYa)
+
+#Long Format  
+plotDataOne <- gather(plotDataOne, "data", "value", -index)
+
+#Print variables that contribute
+varImp(lrOne)
+# we can remove TEAM_PITCHING_BB based on variable importance
+#display
+kable(acc1)
+
+#Plot predicted and actual data 
+ggplot(plotDataOne) +
+  geom_point(aes(x = index, y = value, color = data)) +
+  geom_line(aes(x = index, y = value, color = data)) + 
+  labs(x='Index', y="Yeild", title='Predicted vs. Actual Values (Test Set)') +
+  theme( plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r}
+#Mulitple linear regression B
+#train the model
+lrTwo <- train(trainXB,trainYb, method = "lm", trControl = ctrl)
+
+#make predictions
+predTwo <- predict(lrTwo$finalModel, testXb)
+
+#accuracy measures
+acc2 <- postResample(pred = predTwo, obs = testYb)
+#change to df
+predTwo <- as.data.frame(predTwo)
+#Df for plotting
+plotDataTwo <- data.frame(index = seq(1,length(testYb),1), prediction = predTwo$predTwo, actual = testYb)
+
+#Long Format  
+plotDataTwo <- gather(plotDataTwo, "data", "value", -index)
+
+#Print variables that contribute
+varImp(lrTwo)
+
+#display
+kable(acc2)
+
+#Plot predicted and actual data 
+ggplot(plotDataTwo) +
+  geom_point(aes(x = index, y = value, color = data)) +
+  geom_line(aes(x = index, y = value, color = data)) + 
+  labs(x='Index', y="Yeild", title='Predicted vs. Actual Values (Test Set with PCA)') +
+  theme( plot.title = element_text(hjust = 0.5))
+
+#May Want to remove PC9 because it does not contribute
+
+```
+
+```{r}
+#Mulitple linear regression C
+#train the model
+lrThree <- train(trainXC,trainYc, method = "lm", trControl = ctrl)
+
+#make predictions
+predThree <- predict(lrThree$finalModel, testXc)
+
+#accuracy measures
+acc3 <- postResample(pred = predThree, obs = testYc)
+#change to df
+predThree <- as.data.frame(predThree)
+#Df for plotting
+plotDataThree <- data.frame(index = seq(1,length(testYc),1), prediction = predThree$predThree, actual = testYc)
+
+#Long Format  
+plotDataThree <- gather(plotDataThree, "data", "value", -index)
+
+#Print variables that contribute
+varImp(lrThree)
+#team baserun cs should be deleted not important
+
+#display
+kable(acc3)
+
+#Plot predicted and actual data 
+ggplot(plotDataThree) +
+  geom_point(aes(x = index, y = value, color = data)) +
+  geom_line(aes(x = index, y = value, color = data)) + 
+  labs(x='Index', y="Yeild", title='Predicted vs. Actual Values (Test Set with PCA)') +
+  theme( plot.title = element_text(hjust = 0.5))
+```
+# I want to add pmm imputation model
+# can we use ridge regression or random forest?
+
+# Select Models
+- display accuracy
+
+
+
