@@ -1,0 +1,192 @@
+---
+title: "Data 621 - HW 1"
+author: " Group 4 \n Layla Quinones, Ian Castello, Dmitriy Burtsev & Esteban Aramayo "
+date: "Sept. 26, 2021"
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+#libraries
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(VIM)
+library(naniar)
+library(GGally)
+library(caret)
+library(psych)
+```
+# Data Exploration
+
+```{r}
+#import the data
+urlTraining = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW1/moneyball-training-data.csv"
+
+#get the data
+rawData <- read.csv(urlTraining)
+
+#Display what we imported
+glimpse(rawData)
+
+#From this we can see that there are 2276 observations and 17 variables in total which means we have 1 variable with a unique index, 15 features and 1 target variable to train our model. There is no categorical variables and every variable is an integer. There also appears to be missing values in this data set.
+```
+
+```{r}
+#display summary statistics
+summary(rawData)
+
+#From this we can gain some more insight into each variable specifically. We can see that most variables seem to be close to normally distributed (with a few exceptions) and some have NA values that we should clean up. 
+```
+
+```{r}
+#Using describe we can get even more insight into the shape of each variable
+describe(rawData)
+
+#pitching looks highly skewed
+```
+
+```{r}
+#distribution of each variable
+par(mfrow = c(3,3))
+for(i in 2:ncol(rawData)) {
+  plot(rawData[i], main = colnames(rawData[i]), col = "red")
+}
+
+#shows that pitching variables are skewed and can affect training the model
+
+```
+
+```{r}
+#Lets take a look at missing values (using naniar)
+gg_miss_var(rawData)
+
+#This graph gives us a visual of how many missing values there are n each variable which will determine how or weather we impute, delete those data points or ignore that variable as a whole. From this visualization I can tell that Team_Batting_HBP has mostly NAs and can be deleted. We also know the last three variables on this chart (Target Wins and Index) are not going to be part of the training set because index has no meaning behind it and target_wins is or target variable. 
+```
+
+```{r}
+#make long
+longData <- rawData %>%
+  gather(key = Variable, value = Value)
+
+#Initial boxplot with outliers and NAs omitted
+ggplot(longData, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Moneyball Data Variables", y="Value")
+
+#This visualization gives us an idea of all the outliers we have in each variable but does not give us a good sense of the distribution. We can use the visualization above to interpret shape. From the graph below we see that the variable TEAM_PITCHING_H has the greatest number of outliers which may mean we throw that variable out and not consider it in our model. 
+```
+
+```{r}
+#Boxplot without outliers (ignoring all points greeater than 1500)
+#filtering out target and index
+rawData2 <- longData %>%
+  filter(Variable != "INDEX", Variable != "TARGET_WINS")
+  
+  
+ggplot(rawData2, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+  ylim(0,3000) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_flip()+
+  labs(title="Moneyball Data Variables (ylim = 3000)", y="Number of Employees")
+
+#removed rows are NA values - This visualization gives a better sense of how many outliers there are in each variable which we may or may not have to take into account in our Data Prep for models.
+```
+
+```{r}
+#Lets compare means and medians to get a better sense of skew
+p <-summary(rawData) %>% #gather sumary stats
+  as.data.frame(.) %>% #trurn into DF
+  filter(grepl('Mean|Median', Freq))%>% #grab means and medians
+  separate(Freq, c('Measure', 'Value'))%>% # seperate column into numeric and measure
+  transform(Value = as.numeric(Value))%>% #make sure the value column is numeric
+  select(Var2:Value)
+
+#plot overlapping
+ggplot(p, aes(x=Var2, y=Value))+
+  geom_bar(stat = "identity", aes(fill=Measure))+
+  geom_hline(yintercept=seq(1,1700,100), col="white", lwd=1)+
+  theme_classic()+
+  coord_flip()+
+  scale_fill_discrete(name = "Metric", labels = c("Mean", "Median")) +
+  labs(title="Moneyball Variables", y="Measure")
+
+#This graph gives an even clearer sense of possible skew in data. We see again TEAM_PITCHING_H has a huge skew, TEAM_PITCHING_SO and BB, TEAM_BATTING_SO and BB are also signifcantly skewed. The rest is still hard to tell.
+```
+
+```{r}
+#correlation between variables
+rawTrainX <- rawData %>%
+  select(TEAM_BATTING_H: TEAM_FIELDING_DP)
+
+rawTrainY <- rawData$TARGET_WINS
+
+#correlation matrix (use only complete observations)
+cor(rawTrainX, use = "complete.obs")
+
+#correlation matrix visualization
+ggcorr(rawTrainX)
+
+#check variance (there are none) which is good - we would throw this out if there was one iwth zero variance
+nearZeroVar(rawTrainX)
+
+#There are a number of correlated variables which may affect the model - we want to make sure that colinearity and correlated variables are not going to affect the model we will be using. Here we can see that TEAM_BATTING_H & TEAM_PITCHING H, TEAM_BATTING_HR & TEAM_PITCHING HR, TEAM_BATTING_BB & TEAM_PITCHING BB, TEAM_BATTING_SO & TEAM_PITCHING SO, TEAM_BATTING_HR & TEAM_PITCHING HR are all above a 75% correlation. I would love to play around with including one in each group or maybe developing features that are linear combinations of those variables (PCA maybe).
+```
+
+```{r}
+#Feature Plot against target variable
+  featurePlot(y = rawTrainY, 
+              x = rawTrainX[1:3],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+
+  featurePlot(y = rawTrainY, 
+              x = rawTrainX[4:6],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+  
+    featurePlot(y = rawTrainY, 
+              x = rawTrainX[7:9],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+    
+      featurePlot(y = rawTrainY, 
+              x = rawTrainX[10:12],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+      
+        featurePlot(y = rawTrainY, 
+              x = rawTrainX[13:15],
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+
+#from these plots we can see that we should be mindful of TEAM_PITCHING_ (not so much HR), TEAM_FIELDING_E variables because they are obveously highly skewed and dont follow the trend line much
+```
+
+# Data Preperation
+
+
+
+# Build Models
+
+# Select Models
+
+
