@@ -23,13 +23,10 @@ library(psych)
 ```{r}
 #import the data
 urlTraining = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW1/moneyball-training-data.csv"
-
 #get the data
 rawData <- read.csv(urlTraining)
-
 #Display what we imported
 str(rawData)
-
 #From this we can see that there are 2276 observations and 17 variables in total which means we have 1 variable with a unique index, 15 features and 1 target variable to train our model. There is no categorical variables and every variable is an integer. There also appears to be missing values in this data set.
 ```
 
@@ -37,16 +34,13 @@ str(rawData)
 ```{r}
 #display summary statistics
 summary(rawData)
-
 #Using describe we can get even more insight into the shape of each variable
 describe(rawData)
-
 #histograms
 par(mfrow = c(3,3))
 for(i in 2:ncol(rawData)) {#distribution of each variable
   hist(rawData[[i]], main = colnames(rawData[i]), col = "skyblue")
 }
-
 #From this we can gain some more insight into each variable specifically. We can see that there is variation in the distribution for each varable. Some seem normally Distributed while others seem skewed. We can visualize this better using historgrams - This will help us decide how to impute and/or transform each variable for optimization of out model.
 ```
 
@@ -67,11 +61,8 @@ ggplot(rawTrainXLONG, aes(Variable, Value, fill = Variable)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   coord_flip()+
   labs(title="Moneyball Data Variables (ylim = 3000)")
-
 #removed rows are NA values - This visualization gives a better sense of how many outliers there are in each variable which we may or may not have to take into account in our Data Prep for models.
-
 #There are some outliers that exceel the limit i set for this visual (3000) that we can imupute.
-
 #This visualization gives us an idea of all the outliers we have in each variable but does not give us a good sense of the distribution. We can use the visualization above to interpret shape. From the graph below we see that the variable TEAM_PITCHING_H has the greatest number of outliers which may mean we throw that variable out and not consider it in our model. We'll have to impute these outliers during preprocessing.
 ```
 
@@ -81,7 +72,6 @@ Before we do any transformations, we should impute missing values and outliers.
 #Lets take a look at missing values (using naniar)
 gg_miss_var(rawData) +
   labs(title="Moneyball Missing Data")
-
 #right away we can tell that TEAM_BATTING_HBP needs to be thrown out.
 ```
 
@@ -89,7 +79,6 @@ gg_miss_var(rawData) +
 #seperate train x and y
 rawTrainX <- rawData %>%
   select(-INDEX, -TARGET_WINS)
-
 rawTrainY <- rawData %>%
   select(TARGET_WINS)
 ```
@@ -106,10 +95,8 @@ Since `TEAM_BATTING_HBP` has about 91.6 percent of the data missing we will omit
 #checking for correlated vairables (looks like we have one)
 #correlation matrix (use only complete observations)
 corMat <- cor(rawTrainX, use = "complete.obs")
-
 #display correlation
 kable(corMat)
-
 #correlation matrix visualization
 ggcorr(rawTrainX)
 ```
@@ -123,7 +110,6 @@ findCorrelation(cor(rawTrainX),
                 verbose = TRUE,
                 names = TRUE)
 #TEAM_PITCHING_HR will be omitted due to correlation (when we tested adding and subtracting this variable along with BATTING_HR it did not add any significant value)
-
 #There are a number of correlated variables which may affect the model - we want to make sure that colinearity and correlated variables are not going to affect the model we will be using. 
 ```
 
@@ -133,7 +119,6 @@ findCorrelation(cor(rawTrainX),
 #Drop Correlated Variable - TEAM_BATTING_HR - we may want to revisit this once we develop the model and see the changes when we add the other correlated variable - BATTING HR IS CORRELATED TO BOTH BATTING_SO AND PITCHING_HR
 trainX <- rawTrainX %>%
   select(-TEAM_BATTING_HR, -TEAM_BATTING_HBP)
-
 #Impute Missing Data based on distribution
 trainX <- trainX %>%
   mutate(TEAM_BATTING_SO = ifelse(is.na(rawTrainX$TEAM_BATTING_SO), mean(rawTrainX$TEAM_BATTING_SO,na.rm=TRUE), rawTrainX$TEAM_BATTING_SO), 
@@ -144,7 +129,6 @@ trainX <- trainX %>%
   
 #MEAN IMPUTED DUE TO DISTRIBUTION: BATTING_SO, 
 #MEDIAN IMPUTED DUE TO DISTRIBUTION: FIELDING_DP,BASERUN_SB, BASERUN_CS
-
 ```
 
 Impute outliers using knn - center and scale them
@@ -192,22 +176,20 @@ for(i in 1:ncol(trainX)){
 
 # Build Model
 
-
 ```{r}
+#Set up control to be 10-fold-crossvalidation
+ctrl <- trainControl(method = "cv", number = 10) 
+
 #ALL
 modelOne <- train(x = as.data.frame(trainX), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
-
 modelOne
-
 #When we use all the variables we do not get a satisfactory R squared value therfore based on the feature plots we began from scratch and added variables in
-
 ```
 
 ```{r}
 #SOme
 # R squared is better but still is bad
 modelTwo <- train(x = as.data.frame(trainX %>% select (TEAM_BATTING_H: TEAM_BATTING_SO)), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
-
 modelTwo
 ```
 
@@ -215,7 +197,6 @@ modelTwo
 #SOme
 # R squared is better but still is bad
 modelThree <- train(x = as.data.frame(trainX %>% select (TEAM_BATTING_H: TEAM_PITCHING_HR)), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
-
 modelThree
 ```
 
@@ -232,19 +213,15 @@ par(mfrow = c(3,3))
 for(i in 1:ncol(trainX)) {#distribution of each variable
   hist(trainX[[i]], main = colnames(trainX[i]), col = "skyblue")
 }
-
 ```
 
 ```{r}
-
 #right skew
 #BATTING 3B, BASERUN_SB, PITCHING_H. BASERUN_CS, BATING_H, PITCHING_HR, pitching SO
-
 #left skew
 #fielding dp, 
 ```
 
 ```{r}
 trainX
-
 ```
