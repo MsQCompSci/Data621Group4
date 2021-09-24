@@ -1,0 +1,296 @@
+---
+title: "Data 621 - Homework 1"
+author: " Group 4 \n Layla Quinones, Ian Castello, Dmitriy Burtsev & Esteban Aramayo "
+date: "Sept. 26, 2021"
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+#libraries
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(VIM)
+library(naniar)
+library(GGally)
+library(caret)
+library(psych)
+library(xtable)
+```
+
+# About the Data
+
+The data set consists of 2,276 records and 17 different variables, with each observation corresponding to a baseball teams performance in a single year. The time horizon of these data are from 1871, the same year as the first recorded professional baseball game through 2006. 
+
+## General objective
+
+Through linear regression, train the data to predict the number of wins.
+
+## Challenges Right Off the Bat (so to speak)
+
+The data set covers a very large time period. The rules and play style of baseball has changed a great deal from the late 19th-century. The season year of the team would be an important factor in improving these models. Additionally, certain clubs have bucked trends in winning or losing despite these metrics. The Boston Red Sox and Chicago Cubs had very long dry spells, even with good numbers. 
+
+# Data Exploration
+
+Our data is stored for easy reference among the team on GitHub. With 2,276 team observations and 17 variables. Of those, 15 are features, 1 is an index, and the remaining is our target variable for number of wins. Right away, we already know that missing values will need to be accounted for in all of this features.
+
+```{r}
+#import the data
+urlTraining = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW1/moneyball-training-data.csv"
+
+#get the data
+rawData <- read.csv(urlTraining)
+
+#Display what we imported
+str(rawData)
+
+```
+
+## Summary Statistics
+
+
+```{r}
+#display summary statistics
+summary(rawData) %>%
+  t() %>%
+  kable() %>%
+  kable_styling(latex_options="scale_down")
+  
+
+#Using describe we can get even more insight into the shape of each variable
+describe(rawData) %>%
+  kable() %>%
+  kable_styling(latex_options="scale_down")
+
+#histograms
+par(mfrow = c(3,3))
+for(i in 2:ncol(rawData)) {#distribution of each variable
+  hist(rawData[[i]], main = colnames(rawData[i]), col = "skyblue")
+}
+
+#From this we can gain some more insight into each variable specifically. We can see that there is variation in the distribution for each variable. Some seem normally Distributed while others seem skewed. We can visualize this better using historgrams - This will help us decide how to impute and/or transform each variable for optimization of out model.
+```
+
+```{r}
+#Boxplot with outliers
+#filtering out target and index for just predictors
+rawTrainXLONG <- rawData %>%
+  select(-INDEX, -TARGET_WINS) %>%
+  gather(key = Variable, value = Value)
+  
+  
+ggplot(rawTrainXLONG, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+  ylim(0,3000) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_flip()+
+  labs(title="Moneyball Data Variables (ylim = 3000)")
+
+#removed rows are NA values - This visualization gives a better sense of how many outliers there are in each variable which we may or may not have to take into account in our Data Prep for models.
+
+#There are some outliers that exceel the limit i set for this visual (3000) that we can imupute.
+
+#This visualization gives us an idea of all the outliers we have in each variable but does not give us a good sense of the distribution. We can use the visualization above to interpret shape. From the graph below we see that the variable TEAM_PITCHING_H has the greatest number of outliers which may mean we throw that variable out and not consider it in our model. We'll have to impute these outliers during preprocessing.
+```
+
+Before we do any transformations, we should impute missing values and outliers.
+
+```{r}
+#Lets take a look at missing values (using naniar)
+gg_miss_var(rawData) +
+  labs(title="Moneyball Missing Data")
+
+#right away we can tell that TEAM_BATTING_HBP needs to be thrown out.
+```
+
+```{r}
+#seperate train x and y
+rawTrainX <- rawData %>%
+  select(-INDEX, -TARGET_WINS)
+
+rawTrainY <- rawData %>%
+  select(TARGET_WINS)
+```
+
+```{r}
+#Lets see how we can throw away (as a general rule )
+#What percent is missing? (must be below 60))
+data.frame(TEAM_BATTING_HBP = sum(is.na(rawTrainX$TEAM_BATTING_HBP))/nrow(rawTrainX), TEAM_BASERUN_CS = sum(is.na(rawTrainX$TEAM_BASERUN_CS))/nrow(rawTrainX), TEAM_FIELDING_DP = sum(is.na(rawTrainX$TEAM_FIELDING_DP))/nrow(rawTrainX), TEAM_BASERUN_SB = sum(is.na(rawTrainX$TEAM_BASERUN_SB))/nrow(rawTrainX), TEAM_BATTING_SO = sum(is.na(rawTrainX$TEAM_BATTING_SO))/nrow(rawTrainX), TEAM_PITCHING_SO = sum(is.na(rawTrainX$TEAM_BATTING_SO))/nrow(rawTrainX))
+```
+
+Since `TEAM_BATTING_HBP` has about 91.6 percent of the data missing we will omit it. (maybe add a rationale as to why we can do this or why this is best). We will be using the histagrams for each other variable to decide how to impute during the preprocessing stage. 
+
+```{r}
+#checking for correlated variables (looks like we have one)
+#correlation matrix (use only complete observations)
+corMat <- round(cor(rawTrainX, use = "complete.obs"),2)
+
+#correlation matrix visualization
+ggcorr(rawTrainX, label=TRUE, label_size=3, size=2, nudge_y=0.15)
+```
+
+
+
+```{r}
+temp <- rawData %>% 
+  cor(., use = "complete.obs") #%>%
+  
+temp[lower.tri(temp, diag=TRUE)] <- ""
+temp <- temp %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  gather(Variable, Correlation, -rowname) %>%
+  filter(Variable != rowname) %>%
+  filter(Correlation != "") %>%
+  mutate(Correlation = as.numeric(Correlation)) %>%
+  rename(` Variable` = rowname) %>%
+  arrange(desc(abs(Correlation))) 
+
+
+temp %>%
+  filter(` Variable` == "TARGET_WINS") %>%
+  kable() %>%
+  kable_styling()
+```
+
+https://towardsdatascience.com/why-exclude-highly-correlated-features-when-building-regression-model-34d77a90ea8e
+
+Talk about that big red square and why we cant have correlated variables in our model. 
+
+```{r}
+#Idenitfy variablke to drop
+findCorrelation(cor(rawTrainX),
+                cutoff = 0.75,
+                verbose = TRUE,
+                names = TRUE)
+#TEAM_PITCHING_HR will be omitted due to correlation (when we tested adding and subtracting this variable along with BATTING_HR it did not add any significant value)
+
+#There are a number of correlated variables which may affect the model - we want to make sure that colinearity and correlated variables are not going to affect the model we will be using. 
+```
+
+# Data Pre-Processing
+
+```{r}
+#Drop Correlated Variable - TEAM_BATTING_HR - we may want to revisit this once we develop the model and see the changes when we add the other correlated variable - BATTING HR IS CORRELATED TO BOTH BATTING_SO AND PITCHING_HR
+trainX <- rawTrainX %>%
+  select(-TEAM_BATTING_HR, -TEAM_BATTING_HBP)
+
+#Impute Missing Data based on distribution
+trainX <- trainX %>%
+  mutate(TEAM_BATTING_SO = ifelse(is.na(rawTrainX$TEAM_BATTING_SO), mean(rawTrainX$TEAM_BATTING_SO,na.rm=TRUE), rawTrainX$TEAM_BATTING_SO), 
+         TEAM_PITCHING_SO = ifelse(is.na(rawTrainX$TEAM_PITCHING_SO), mean(rawTrainX$TEAM_PITCHING_SO,na.rm=TRUE), rawTrainX$TEAM_PITCHING_SO),
+         TEAM_FIELDING_DP = ifelse(is.na(rawTrainX$TEAM_FIELDING_DP), median(rawTrainX$TEAM_FIELDING_DP,na.rm=TRUE), rawTrainX$TEAM_FIELDING_DP),
+         TEAM_BASERUN_SB = ifelse(is.na(rawTrainX$TEAM_BASERUN_SB), median(rawTrainX$TEAM_BASERUN_SB,na.rm=TRUE), rawTrainX$TEAM_BASERUN_SB),
+         TEAM_BASERUN_CS = ifelse(is.na(rawTrainX$TEAM_BASERUN_CS), median(rawTrainX$TEAM_BASERUN_CS,na.rm=TRUE), rawTrainX$TEAM_BASERUN_CS))
+  
+#MEAN IMPUTED DUE TO DISTRIBUTION: BATTING_SO, 
+#MEDIAN IMPUTED DUE TO DISTRIBUTION: FIELDING_DP,BASERUN_SB, BASERUN_CS
+
+```
+
+Impute outliers using knn - center and scale them
+
+```{r}
+#If you have a way to do this inpout here
+```
+
+
+```{r}
+#Boxplot without outliers - improved
+#filtering out target and index for just predictors
+trainXLONG <- trainX %>%
+  gather(key = Variable, value = Value)
+  
+  
+ggplot(trainXLONG, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_flip()+
+  labs(title="Moneyball Data Variables")
+```
+
+
+```{r}
+#histograms
+par(mfrow = c(3,3))
+for(i in 1:ncol(trainX)){
+  hist(trainX[[i]], main = colnames(trainX[i]), col = "skyblue")
+}
+```
+
+```{r}
+#plot of features as they are
+      featurePlot(y = unlist(rawTrainY), 
+              x = trainX,
+              plot = "scatter",
+            type = c("p", "smooth"),
+            span = .5,
+            layout = c(3, 1))
+```
+
+# Build Model
+
+
+```{r}
+#ALL
+ctrl <- trainControl(method = "repeatedcv", repeats = 3)
+
+modelOne <- train(x = as.data.frame(trainX), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
+
+modelOne
+
+#When we use all the variables we do not get a satisfactory R squared value therfore based on the feature plots we began from scratch and added variables in
+
+```
+
+```{r}
+#SOme
+# R squared is better but still is bad
+modelTwo <- train(x = as.data.frame(trainX %>% select (TEAM_BATTING_H: TEAM_BATTING_SO)), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
+
+modelTwo
+```
+
+```{r}
+#SOme
+# R squared is better but still is bad
+modelThree <- train(x = as.data.frame(trainX %>% select (TEAM_BATTING_H: TEAM_PITCHING_HR)), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
+
+modelThree
+```
+
+## Lets start transforming some of these variables
+
+
+```{r}
+summary(trainX)
+```
+
+```{r}
+#histograms
+par(mfrow = c(3,3))
+for(i in 1:ncol(trainX)) {#distribution of each variable
+  hist(trainX[[i]], main = colnames(trainX[i]), col = "skyblue")
+}
+
+```
+
+```{r}
+
+#right skew
+#BATTING 3B, BASERUN_SB, PITCHING_H. BASERUN_CS, BATING_H, PITCHING_HR, pitching SO
+
+#left skew
+#fielding dp, 
+```
+
+```{r}
+trainX
+
+```

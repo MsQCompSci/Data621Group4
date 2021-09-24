@@ -15,10 +15,24 @@ library(naniar)
 library(GGally)
 library(caret)
 library(psych)
+library(xtable)
 ```
 
+# About the Data
+
+The data set consists of 2,276 records and 17 different variables, with each observation corresponding to a baseball teams performance in a single year. The time horizon of these data are from 1871, the same year as the first recorded professional baseball game through 2006. 
+
+## General objective
+
+Through linear regression, train the data to predict the number of wins.
+
+## Challenges Right Off the Bat (so to speak)
+
+The data set covers a very large time period. The rules and play style of baseball has changed a great deal from the late 19th-century. The season year of the team would be an important factor in improving these models. Additionally, certain clubs have bucked trends in winning or losing despite these metrics. The Boston Red Sox and Chicago Cubs had very long dry spells, even with good numbers. 
 
 # Data Exploration
+
+Our data is stored for easy reference among the team on GitHub. With 2,276 team observations and 17 variables. Of those, 15 are features, 1 is an index, and the remaining is our target variable for number of wins. Right away, we already know that missing values will need to be accounted for in all of this features.
 
 ```{r}
 #import the data
@@ -30,16 +44,23 @@ rawData <- read.csv(urlTraining)
 #Display what we imported
 str(rawData)
 
-#From this we can see that there are 2276 observations and 17 variables in total which means we have 1 variable with a unique index, 15 features and 1 target variable to train our model. There is no categorical variables and every variable is an integer. There also appears to be missing values in this data set.
 ```
+
+## Summary Statistics
 
 
 ```{r}
 #display summary statistics
-summary(rawData)
+summary(rawData) %>%
+  t() %>%
+  kable() %>%
+  kable_styling(latex_options="scale_down")
+  
 
 #Using describe we can get even more insight into the shape of each variable
-describe(rawData)
+describe(rawData) %>%
+  kable() %>%
+  kable_styling(latex_options="scale_down")
 
 #histograms
 par(mfrow = c(3,3))
@@ -47,7 +68,7 @@ for(i in 2:ncol(rawData)) {#distribution of each variable
   hist(rawData[[i]], main = colnames(rawData[i]), col = "skyblue")
 }
 
-#From this we can gain some more insight into each variable specifically. We can see that there is variation in the distribution for each varable. Some seem normally Distributed while others seem skewed. We can visualize this better using historgrams - This will help us decide how to impute and/or transform each variable for optimization of out model.
+#From this we can gain some more insight into each variable specifically. We can see that there is variation in the distribution for each variable. Some seem normally Distributed while others seem skewed. We can visualize this better using historgrams - This will help us decide how to impute and/or transform each variable for optimization of out model.
 ```
 
 ```{r}
@@ -103,16 +124,39 @@ data.frame(TEAM_BATTING_HBP = sum(is.na(rawTrainX$TEAM_BATTING_HBP))/nrow(rawTra
 Since `TEAM_BATTING_HBP` has about 91.6 percent of the data missing we will omit it. (maybe add a rationale as to why we can do this or why this is best). We will be using the histagrams for each other variable to decide how to impute during the preprocessing stage. 
 
 ```{r}
-#checking for correlated vairables (looks like we have one)
+#checking for correlated variables (looks like we have one)
 #correlation matrix (use only complete observations)
-corMat <- cor(rawTrainX, use = "complete.obs")
-
-#display correlation
-kable(corMat)
+corMat <- round(cor(rawTrainX, use = "complete.obs"),2)
 
 #correlation matrix visualization
-ggcorr(rawTrainX)
+ggcorr(rawTrainX, label=TRUE, label_size=3, size=2, nudge_y=0.15)
 ```
+
+
+
+```{r}
+temp <- rawData %>% 
+  cor(., use = "complete.obs") #%>%
+  
+temp[lower.tri(temp, diag=TRUE)] <- ""
+temp <- temp %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  gather(Variable, Correlation, -rowname) %>%
+  filter(Variable != rowname) %>%
+  filter(Correlation != "") %>%
+  mutate(Correlation = as.numeric(Correlation)) %>%
+  rename(` Variable` = rowname) %>%
+  arrange(desc(abs(Correlation))) 
+
+
+temp %>%
+  filter(` Variable` == "TARGET_WINS") %>%
+  kable() %>%
+  kable_styling()
+```
+
+https://towardsdatascience.com/why-exclude-highly-correlated-features-when-building-regression-model-34d77a90ea8e
 
 Talk about that big red square and why we cant have correlated variables in our model. 
 
@@ -195,6 +239,8 @@ for(i in 1:ncol(trainX)){
 
 ```{r}
 #ALL
+ctrl <- trainControl(method = "repeatedcv", repeats = 3)
+
 modelOne <- train(x = as.data.frame(trainX), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
 
 modelOne
