@@ -1,0 +1,117 @@
+---
+title: "Data 621 - Homework 1"
+author: " Group 4 \n Layla Quinones, Ian Castello, Dmitriy Burtsev & Esteban Aramayo "
+date: "Sept. 26, 2021"
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE}
+#libraries
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(VIM)
+library(naniar)
+library(GGally)
+library(caret)
+library(psych)
+```
+
+# About the Data
+
+The data set consists of 2,276 records and 17 different variables, with each observation corresponding to a baseball teams performance in a single year. The time horizon of these data are from 1871, the same year as the first recorded professional baseball game through 2006. 
+
+## General objective
+
+Through linear regression, train the data to predict the number of wins.
+
+## Challenges Right Off the Bat (so to speak)
+
+The data set covers a very large time period. The rules and play style of baseball has changed a great deal from the late 19th-century. The season year of the team would be an important factor in improving these models. Additionally, certain clubs have bucked trends in winning or losing despite these metrics. The Boston Red Sox and Chicago Cubs had very long dry spells, even with good numbers. 
+
+# Data Exploration
+
+Our data is stored for easy reference among the team on GitHub. With 2,276 team observations and 17 variables. Of those, 15 are features, 1 is an index, and the remaining is our target variable for number of wins. Right away, we already know that missing values will need to be accounted for in all of this features.
+
+
+```{r}
+#import the data
+urlTraining = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW1/moneyball-training-data.csv"
+
+#get the data
+rawData <- read.csv(urlTraining)
+
+#Display what we imported
+str(rawData)
+```
+
+## Summary Statistics
+
+For each of the variables, these summary statistics provide a nice overview of each feature, its variation, and paths for potential transformations later on for model construction. Of note are the normally distributed variables, like our target variable for wins, base hits by batters, doubles by batters, walks by batters, and batters hit by pitches. The more skewed features include hits allowed, strike outs by pitchers (a very difficult thing to do consistently), and team fielding errors. Once again, we can observe the extent of the N/As and outliers that we'll have to account for. 
+
+```{r}
+#display summary statistics
+summary(rawData) %>%
+  t() %>%
+  kable() %>%
+  kable_styling(latex_options="scale_down")
+  
+
+#Using describe we can get even more insight into the shape of each variable
+describe(rawData) %>%
+  kable() %>%
+  kable_styling(latex_options="scale_down")
+
+#histograms
+par(mfrow = c(3,3))
+for(i in 2:ncol(rawData)) {#distribution of each variable
+  hist(rawData[[i]], main = colnames(rawData[i]), col = "skyblue")
+}
+```
+
+### Box Plots
+
+This visualization gives us an idea of all the outliers we have in each variable but does not give us a good sense of the distribution. We can use the visualization above to interpret shape. From the graph below we see that the variable TEAM_PITCHING_H has the greatest number of outliers which may mean we throw that variable out and not consider it in our model. We'll have to impute these outliers during preprocessing.
+
+removed rows are NA values - This visualization gives a better sense of how many outliers there are in each variable which we may or may not have to take into account in our Data Prep for models.
+
+There are some outliers that exceel the limit i set for this visual (3000) that we can imupute.
+
+
+
+```{r}
+#Boxplot with outliers
+#filtering out target and index for just predictors
+rawTrainXLONG <- rawData %>%
+  select(-INDEX, -TARGET_WINS) %>%
+  gather(key = Variable, value = Value)
+  
+  
+ggplot(rawTrainXLONG, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+  ylim(0,3000) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  coord_flip()+
+  labs(title="Moneyball Data Variables (ylim = 3000)")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

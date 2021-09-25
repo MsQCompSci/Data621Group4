@@ -15,7 +15,6 @@ library(naniar)
 library(GGally)
 library(caret)
 library(psych)
-library(xtable)
 ```
 
 # About the Data
@@ -105,6 +104,14 @@ gg_miss_var(rawData) +
 
 #right away we can tell that TEAM_BATTING_HBP needs to be thrown out.
 ```
+
+
+
+
+
+
+
+
 
 ```{r}
 #seperate train x and y
