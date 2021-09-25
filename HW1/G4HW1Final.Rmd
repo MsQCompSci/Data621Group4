@@ -119,6 +119,7 @@ findCorrelation(cor(rawTrainX),
 #Drop Correlated Variable - TEAM_BATTING_HR - we may want to revisit this once we develop the model and see the changes when we add the other correlated variable - BATTING HR IS CORRELATED TO BOTH BATTING_SO AND PITCHING_HR
 trainX <- rawTrainX %>%
   select(-TEAM_BATTING_HR, -TEAM_BATTING_HBP)
+
 #Impute Missing Data based on distribution
 trainX <- trainX %>%
   mutate(TEAM_BATTING_SO = ifelse(is.na(rawTrainX$TEAM_BATTING_SO), mean(rawTrainX$TEAM_BATTING_SO,na.rm=TRUE), rawTrainX$TEAM_BATTING_SO), 
@@ -202,9 +203,24 @@ modelThree
 
 ## Lets start transforming some of these variables
 
-
 ```{r}
-summary(trainX)
+#log transformated PITCHING_BB didnt work
+# minus the median didnt work
+
+#tried adding median to BATTING3B but the r squared went down so will be leaving it alone
+
+#Added  the median to left skew variables and now we have a highere R squared than our first model that uses all the raw variables!
+fieldingE <- trainX$TEAM_FIELDING_E + median(trainX$TEAM_FIELDING_E)
+baserunSB <- trainX$TEAM_BASERUN_SB + median(trainX$TEAM_BASERUN_SB)
+baserunCS <- trainX$TEAM_BASERUN_CS + median(trainX$TEAM_BASERUN_CS)
+
+trainX <- mutate(trainX, fieldingE = unlist(fieldingE), TEAM_BASERUN_SB = baserunSB, TEAM_BASERUN_CS = baserunCS)
+
+#lets add it to our model
+modelFour <- train(x = as.data.frame(trainX %>% select (TEAM_BATTING_H: TEAM_PITCHING_HR, TEAM_FIELDING_DP, fieldingE)), y = unlist(rawTrainY), method = "lm", trControl = ctrl)
+modelFour
+
+
 ```
 
 ```{r}
@@ -224,3 +240,4 @@ for(i in 1:ncol(trainX)) {#distribution of each variable
 
 ```{r}
 trainX
+```
