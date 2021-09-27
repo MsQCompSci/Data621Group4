@@ -6,21 +6,63 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
+
+```{r}
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(caret)
+
+```
+
+
 
 # 1. Download the classification output data set (attached in Blackboard to the assignment).
 
+```{r}
+HW2_url = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW2/classification-output-data.csv"
+df <- read.csv(HW2_url)
+kable(head(df)) %>%
+  kable_styling()
+```
+
 # 2. The data set has three key columns we will use:
+
   - class: the actual class for the observation
   - scored.class: the predicted class for the observation (based on a threshold of 0.5)
   - scored.probability: the predicted probability of success for the observation
 
 ## Use the table() function to get the raw confusion matrix for this scored dataset. Make sure you understand the output. In particular, do the rows represent the actual or predicted class? The columns?
 
+The rows represents the *actual* class of for the observation. Given the medical statistics in the data, let's say this relates to the presence (or absence) of a medical condition. In this example, zero represents the absence of the condition, one represents the presence. The columns are the scored class, meaning based on the data provided, the prediction of whether (to continue with our example) a condition *may be* present. Zero again representing absence, and one representing presence. 
+
+Now, where the actual and scored classes differ are the errors. Errors can be false positives (type I) or false negatives (type II). In table 1 below, the 30 value are the false negatives, where the predictor scored zero, but the actual class is one. And the 5 value is the false positive, where the predictor scored one, but the actual class is zero. 
+
+```{r}
+kable(table(df$class, df$scored.class)) %>%
+  kable_styling()
+```
+
+
 # 3. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.
 
 $$Accuracy = \frac{TP + TN}{TP + FP + TN + FN}$$
+
+```{r}
+confmat <- function(df){
+  data.frame(TN=nrow(df[df$class==0 & df$scored.class==0,]),
+             FN=nrow(df[df$class==1 & df$scored.class==0,]),
+             FP=nrow(df[df$class==0 & df$scored.class==1,]),
+             TP=nrow(df[df$class==1 & df$scored.class==1,])
+              
+  )
+}
+
+confmat(df)
+
+```
 
 # 4. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.
 
