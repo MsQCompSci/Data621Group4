@@ -193,7 +193,7 @@ With the data cleaned and imputed, we can again review the features and begin se
 
 $R^2 = 0.303$
 
-Our first model is the so-called kitchen sink approach, where all features are included. We get a pretty lousy $R^2$ value, even though the residuals appears to be quite random, if a bit clumped and the F-statistic indicated our model does say *something*.
+Our first model is the so-called kitchen sink approach, where all features are included. We get a pretty lousy $R^2$ value, even though the residuals appears to be quite random, if a bit clumped and the F-statistic indicated our model does say *something*. In general the coefficients make sense: Batting statistics tend to have positive relationships to wins, pitching and fielding statistics have more negative effects. They all seemed in line with the theoretical effects. Because these features are behaving according to expectations, this model is a strong contender for ultimate selection. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 model_1 <- lm(TARGET_WINS ~ ., data = trainData)
