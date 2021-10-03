@@ -356,16 +356,28 @@ caret_cm <- caret::confusionMatrix(as.factor(df$scored.class),
                                    as.factor(df$class), positive = "1")
 
 
-measure_names <- c("Accuracy", "Sensitivity", "Specificity")
+measure_names <- c("Accuracy",
+                   "Sensitivity",
+                   "Specificity",
+                   "Classification Error Rate",
+                   "Precision",
+                   "F1 Score")
 
 # Calculate performance measures using
 caret_funcs_values <- c(caret_cm$overall["Accuracy"],
                     caret_cm$byClass["Sensitivity"],
-                    caret_cm$byClass["Specificity"])
+                    caret_cm$byClass["Specificity"],
+                    NA,
+                    caret_cm$byClass["Pos Pred Value"],
+                    NA)
 
 custom_funcs_values <- c(accuracy_score(df),
                      sensitivity_score(df),
-                     specificity_score(df))
+                     specificity_score(df),
+                     class_err_rate(df),
+                     precision_score(df),
+                     F1_score(df)
+                     )
 
 comparison_df <- data.frame(measure_names, caret_funcs_values, custom_funcs_values)
 
@@ -386,7 +398,19 @@ kable(comparison_df) %>%
 
 ```
 
+metrics_names <- c("Accuracy",
+                    "Classification Error Rate",
+                    "Precision",
+                    "Sensitivity",
+                    "Specificity",
+                    "F1 Score")
 
+metrics_values <- c(accuracy_score(df),
+             class_err_rate(df),
+             precision_score(df),
+             sensitivity_score(df),
+             specificity_score(df),
+             F1_score(df))
 
 
 

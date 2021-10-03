@@ -796,19 +796,32 @@ AUC &lt;- ROC_list[[2]]
 <h1>12. Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?</h1>
 <p>[IC Added: I really liked this overview of the <code>caret</code> package and its capabilities. <a href="https://www.machinelearningplus.com/machine-learning/caret-package/" class="uri">https://www.machinelearningplus.com/machine-learning/caret-package/</a>]</p>
 <pre class="r"><code># Calculate the confusion matrix using Caret function
-caret_cm &lt;- caret::confusionMatrix(as.factor(df$scored.class), as.factor(df$class), positive = &quot;1&quot;)
+caret_cm &lt;- caret::confusionMatrix(as.factor(df$scored.class), 
+                                   as.factor(df$class), positive = &quot;1&quot;)
 
 
-measure_names &lt;- c(&quot;Accuracy&quot;, &quot;Sensitivity&quot;, &quot;Specificity&quot;)
+measure_names &lt;- c(&quot;Accuracy&quot;,
+                   &quot;Sensitivity&quot;,
+                   &quot;Specificity&quot;,
+                   &quot;Classification Error Rate&quot;,
+                   &quot;Precision&quot;,
+                   &quot;F1 Score&quot;)
 
 # Calculate performance measures using
 caret_funcs_values &lt;- c(caret_cm$overall[&quot;Accuracy&quot;],
                     caret_cm$byClass[&quot;Sensitivity&quot;],
-                    caret_cm$byClass[&quot;Specificity&quot;])
+                    caret_cm$byClass[&quot;Specificity&quot;],
+                    NA,
+                    caret_cm$byClass[&quot;Pos Pred Value&quot;],
+                    NA)
 
 custom_funcs_values &lt;- c(accuracy_score(df),
                      sensitivity_score(df),
-                     specificity_score(df))
+                     specificity_score(df),
+                     class_err_rate(df),
+                     precision_score(df),
+                     F1_score(df)
+                     )
 
 comparison_df &lt;- data.frame(measure_names, caret_funcs_values, custom_funcs_values)
 
@@ -816,7 +829,10 @@ comparison_df &lt;- data.frame(measure_names, caret_funcs_values, custom_funcs_v
 comparison_df &lt;- comparison_df %&gt;%
   mutate(Difference = caret_funcs_values - custom_funcs_values)
 
-colnames(comparison_df) &lt;- c(&quot;Performance Measure&quot;, &quot;Caret function result&quot;, &quot;Custom function result&quot;, &quot;Difference&quot;)
+colnames(comparison_df) &lt;- c(&quot;Performance Measure&quot;,
+                             &quot;Caret function result&quot;,
+                             &quot;Custom function result&quot;,
+                             &quot;Difference&quot;)
 
 
 # Show results comparison
@@ -825,8 +841,6 @@ kable(comparison_df) %&gt;%
 <table class="table" style="margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
-<th style="text-align:left;">
-</th>
 <th style="text-align:left;">
 Performance Measure
 </th>
@@ -846,9 +860,6 @@ Difference
 <td style="text-align:left;">
 Accuracy
 </td>
-<td style="text-align:left;">
-Accuracy
-</td>
 <td style="text-align:right;">
 0.8066298
 </td>
@@ -860,9 +871,6 @@ Accuracy
 </td>
 </tr>
 <tr>
-<td style="text-align:left;">
-Sensitivity
-</td>
 <td style="text-align:left;">
 Sensitivity
 </td>
@@ -880,9 +888,6 @@ Sensitivity
 <td style="text-align:left;">
 Specificity
 </td>
-<td style="text-align:left;">
-Specificity
-</td>
 <td style="text-align:right;">
 0.9596774
 </td>
@@ -891,10 +896,54 @@ Specificity
 </td>
 <td style="text-align:right;">
 0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Classification Error Rate
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+0.1933702
+</td>
+<td style="text-align:right;">
+NA
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Precision
+</td>
+<td style="text-align:right;">
+0.8437500
+</td>
+<td style="text-align:right;">
+0.8437500
+</td>
+<td style="text-align:right;">
+0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+F1 Score
+</td>
+<td style="text-align:right;">
+NA
+</td>
+<td style="text-align:right;">
+0.6067416
+</td>
+<td style="text-align:right;">
+NA
 </td>
 </tr>
 </tbody>
 </table>
+<p>metrics_names &lt;- c(“Accuracy”, “Classification Error Rate”, “Precision”, “Sensitivity”, “Specificity”, “F1 Score”)</p>
+<p>metrics_values &lt;- c(accuracy_score(df), class_err_rate(df), precision_score(df), sensitivity_score(df), specificity_score(df), F1_score(df))</p>
 </div>
 <div id="investigate-the-proc-package.-use-it-to-generate-an-roc-curve-for-the-data-set.-how-do-the-results-compare-with-your-own-functions" class="section level1">
 <h1>13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?</h1>
