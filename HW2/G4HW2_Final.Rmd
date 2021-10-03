@@ -2,10 +2,7 @@
 title: "Data 621 - Homework 2"
 author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
 date: "OCtober 10, 2021"
-output:
-  pdf_document: default
-  html_document:
-    df_print: paged
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE, tidy=TRUE}
@@ -20,8 +17,6 @@ library(caret)
 library(pROC)
 
 ```
-
-
 
 # 1. Download the classification output data set (attached in Blackboard to the assignment).
 
@@ -49,7 +44,6 @@ kable(table(df$class, df$scored.class)) %>%
   kable_styling()
 ```
 
-
 # 3. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.
 
 $$Accuracy = \frac{TP + TN}{TP + FP + TN + FN}$$
@@ -75,16 +69,13 @@ accuracy_score <- function(df){
   cm <- confmat(df)
   
   # Calculate accuracy from confusion matrix
-  ( cm$TP + cm$TN ) / ( cm$TP + cm$FP + cm$TN + cm$FN )
+  round(( cm$TP + cm$TN ) / ( cm$TP + cm$FP + cm$TN + cm$FN ),4)
 
 }
 
 # test accuracy_score
-print(accuracy_score(df))
-
+print(paste("Accuracy Score: ",accuracy_score(df)))
 ```
-
-
 
 # 4. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.
 
@@ -97,29 +88,24 @@ class_err_rate <- function(df){
   cm <- confmat(df)
   
   # Calculate Classification Error Rate from confusion matrix
-  ( cm$FP + cm$FN ) / ( cm$TP + cm$FP + cm$TN + cm$FN )
+  round(( cm$FP + cm$FN ) / ( cm$TP + cm$FP + cm$TN + cm$FN ),4)
 
 }
 
 # test class_err_rate
-print(class_err_rate(df))
+print(paste("Classification Error Rate: ", class_err_rate(df)))
 
 ```
 
-
 ## Verify that you get an accuracy and an error rate that sums to one.
-
 
 ```{r}
 as <- accuracy_score(df)
 cer <- class_err_rate(df)
-print(as)
-print(cer)
-print(as + cer)
+print(paste("Accuracy Score: ", as))
+print(paste("Classification Error: ", cer))
+print(paste("Accuracy Score + Classification Error: ", as + cer))
 ```
-
-
-
 
 # 5. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.
 
@@ -131,17 +117,13 @@ precision_score <- function(df){
   cm <- confmat(df)
   
   # Calculate Precision from confusion matrix
-  cm$TP / ( cm$TP + cm$FP )
+  round(cm$TP / ( cm$TP + cm$FP ), 4)
 
 }
 
 # test precision_score
-print(precision_score(df))
-
+print(paste("Precision Score: ", precision_score(df)))
 ```
-
-
-
 
 # 6. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
 
@@ -153,16 +135,13 @@ sensitivity_score <- function(df){
   cm <- confmat(df)
   
   # Calculate Sensitivity from confusion matrix
-  cm$TP / ( cm$TP + cm$FN )
+  round(cm$TP / ( cm$TP + cm$FN ), 4)
 
 }
 
 # test sensitivity_score
-print(sensitivity_score(df))
-
+print(paste("Sensitivity Score: ", sensitivity_score(df)))
 ```
-
-
 
 # 7. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.
 
@@ -174,21 +153,17 @@ specificity_score <- function(df){
   cm <- confmat(df)
   
   # Calculate Specificity from confusion matrix
-  cm$TN / ( cm$TN + cm$FP )
+  round(cm$TN / ( cm$TN + cm$FP ), 4)
 
 }
 
 # test specificity_score
-print(specificity_score(df))
-
+print(paste("Specificity Score: ", specificity_score(df)))
 ```
-
-
 
 # 8. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.
 
 $$F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$$
-
 
 ```{r}
 F1_score <- function(df){
@@ -197,13 +172,12 @@ F1_score <- function(df){
   sensit <- sensitivity_score(df)
   
   # Calculate F1 Score
-  ( 2 * precis * sensit ) / ( precis + sensit )
+  round(( 2 * precis * sensit ) / ( precis + sensit ), 4)
 
 }
 
 # test F1_score
-print(F1_score(df))
-
+print(paste("F1 Score: ", F1_score(df)))
 ```
 
 # 9. Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. 
@@ -277,17 +251,14 @@ AUC_ROC <- function(df){
          x = "False Positive Rate (1 - Specificity)",
          y = "True Positive Rate (Sensitivity)")
   
-  return(list(ROC_plot, area_under_curve))
+  return(list(ROC_plot, round(area_under_curve, 4)))
 }
-```
 
-```{r}
-ROC_list <- AUC_ROC(df)
-ROC_plot <- ROC_list[[1]]
-AUC <- ROC_list[[2]]
- 
-ROC_plot
-print(AUC)
+# ROC_list <- AUC_ROC(df)
+# ROC_plot <- ROC_list[[1]]
+# AUC <- ROC_list[[2]]
+# ROC_plot
+# print(AUC)
 ```
 
 # 11. Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
@@ -317,8 +288,6 @@ kable(metrics_df) %>%
 
 ```
 
-
-
 ```{r}
 ROC_list <- AUC_ROC(df)
 ROC_plot <- ROC_list[[1]]
@@ -328,23 +297,15 @@ AUC <- ROC_list[[2]]
  print(AUC)
 ```
 
-
-
-
-
-
-
 # 12. Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions? 
 
 [IC Added: I really liked this overview of the `caret` package and its capabilities. https://www.machinelearningplus.com/machine-learning/caret-package/]
-
-
 
 ```{r}
 
 # Calculate the confusion matrix using Caret function
 caret_cm <- caret::confusionMatrix(as.factor(df$scored.class), 
-                                   as.factor(df$class), positive = "1")
+                                   as.factor(df$class),mode='everything', positive = "1")
 
 
 measure_names <- c("Accuracy",
@@ -355,12 +316,12 @@ measure_names <- c("Accuracy",
                    "F1 Score")
 
 # Calculate performance measures using
-caret_funcs_values <- c(caret_cm$overall["Accuracy"],
-                    caret_cm$byClass["Sensitivity"],
-                    caret_cm$byClass["Specificity"],
+caret_funcs_values <- c(round(caret_cm$overall["Accuracy"],4),
+                    round(caret_cm$byClass["Sensitivity"], 4),
+                    round(caret_cm$byClass["Specificity"],4),
                     NA,
-                    caret_cm$byClass["Pos Pred Value"],
-                    NA)
+                    round(caret_cm$byClass["Pos Pred Value"],4),
+                    round(caret_cm$byClass["F1"],4))
 
 custom_funcs_values <- c(accuracy_score(df),
                      sensitivity_score(df),
@@ -370,7 +331,7 @@ custom_funcs_values <- c(accuracy_score(df),
                      F1_score(df)
                      )
 
-comparison_df <- data.frame(measure_names, caret_funcs_values, custom_funcs_values)
+comparison_df <- tibble(measure_names, caret_funcs_values, custom_funcs_values)
 
 
 comparison_df <- comparison_df %>%
@@ -389,27 +350,9 @@ kable(comparison_df) %>%
 
 ```
 
-metrics_names <- c("Accuracy",
-                    "Classification Error Rate",
-                    "Precision",
-                    "Sensitivity",
-                    "Specificity",
-                    "F1 Score")
-
-metrics_values <- c(accuracy_score(df),
-             class_err_rate(df),
-             precision_score(df),
-             sensitivity_score(df),
-             specificity_score(df),
-             F1_score(df))
-
-
-
 # 13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?
 
-
 ```{r}
-
 #define object to plot and calculate AUC
 rocobj <- pROC::roc(df$class, df$scored.probability)
 auc <- round(pROC::auc(df$class, df$scored.probability),4)
@@ -417,7 +360,6 @@ auc <- round(pROC::auc(df$class, df$scored.probability),4)
 #create ROC plot
 ggroc(rocobj, colour = 'steelblue', size = 2) +
   ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')'))
-
 ```
 
 ```{r}
@@ -427,6 +369,8 @@ AUC <- ROC_list[[2]]
  
 ROC_plot
 ```
+
+
 
 
 
