@@ -1,0 +1,146 @@
+---
+title: "Data 621 - Homework 2"
+author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
+date: "OCtober 10, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(pROC)
+```
+
+
+
+# 1. Download the classification output data set (attached in Blackboard to the assignment).
+
+```{r}
+HW2_url = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW2/classification-output-data.csv"
+df <- read.csv(HW2_url)
+kable(head(df)) %>%
+  kable_styling()
+```
+
+# 2. The data set has three key columns we will use:
+
+  - class: the actual class for the observation
+  - scored.class: the predicted class for the observation (based on a threshold of 0.5)
+  - scored.probability: the predicted probability of success for the observation
+  
+  
+
+## Use the table() function to get the raw confusion matrix for this scored dataset. Make sure you understand the output. In particular, do the rows represent the actual or predicted class? The columns?
+
+The rows represents the *actual* class of for the observation. Given the medical statistics in the data, let's say this relates to the presence (or absence) of a medical condition. In this example, zero represents the absence of the condition, one represents the presence. The columns are the scored class, meaning based on the data provided, the prediction of whether (to continue with our example) a condition *may be* present. Zero again representing absence, and one representing presence. 
+
+Now, where the actual and scored classes differ are the errors. Errors can be false positives (type I) or false negatives (type II). In table 1 below, the 30 value are the false negatives, where the predictor scored zero, but the actual class is one. And the 5 value is the false positive, where the predictor scored one, but the actual class is zero. 
+
+```{r}
+kable(table(df$class, df$scored.class)) %>%
+  kable_styling()
+```
+
+
+# 3. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.
+
+$$Accuracy = \frac{TP + TN}{TP + FP + TN + FN}$$
+
+```{r}
+confmat <- function(df){
+  data.frame(TN=nrow(df[df$class==0 & df$scored.class==0,]),
+             FN=nrow(df[df$class==1 & df$scored.class==0,]),
+             FP=nrow(df[df$class==0 & df$scored.class==1,]),
+             TP=nrow(df[df$class==1 & df$scored.class==1,])
+              
+  )
+}
+
+tmp_var = confmat(df)
+
+tn = as.double(tmp_var$TN)
+fn = as.double(tmp_var$FN)
+fp = as.double(tmp_var$FP)
+tp = as.double(tmp_var$TP)
+accuracy = (tp + tn)/(tp + fp + tn + fn)
+cat("Accuracy is ", accuracy)
+```
+
+# 4. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.
+
+$$Classification\ Error\ Rate = \frac{FP + FN}{TP + FP + TN + FN}$$
+```{r}
+cer = (fp + fn)/(tp + fp + tn + fn)
+cat("Classification Error Rate is ", cer)
+```
+
+## Verify that you get an accuracy and an error rate that sums to one.
+
+# 5. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.
+
+$$Precision = \frac{TP}{TP + FP}$$
+```{r}
+prec = tp /(tp + fp)
+cat("Precision is ", prec)
+```
+
+# 6. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
+
+$$Sensitivity = \frac{TP}{TP+FN}$$
+```{r}
+sen = tp /(tp + fn)
+cat("Sensitivity is ", sen)
+```
+
+# 7. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.
+
+$$Specificity = \frac{TP}{TP+FN}$$
+```{r}
+spe = tp/(tp + fn)
+cat("Specificity is", spe)
+```
+
+# 8. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.
+
+$$F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$$
+```{r}
+f1score = 2 * prec * sen /(prec + sen)
+cat("F1 Score is", f1score)
+```
+
+# 9. Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. 
+
+*(Hint:  If $0 < a < 1$ and $0 < b < 1$ then $ab < a$.)*
+
+# 10. Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). 
+```{r}
+svmROC <- roc(df$class ~ df$scored.class,plot=TRUE,print.auc=TRUE,col="blue",lwd = 4,print.auc.y=0.4,legacy.axes=TRUE,add = TRUE)
+```
+
+*Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.*
+
+```{r}
+plot.roc(df$scored.class, df$class,# data
+percent=TRUE, # show all values in percent
+partial.auc=c(100, 90), partial.auc.correct=TRUE, # define a partial AUC (pAUC)
+print.auc=TRUE, #display pAUC value on the plot with following options:
+print.auc.pattern="Corrected pAUC (100-90%% SP):\n%.1f%%", print.auc.col="#1c61b6",
+auc.polygon=TRUE, auc.polygon.col="#1c61b6", # show pAUC as a polygon
+max.auc.polygon=TRUE, max.auc.polygon.col="#1c61b622", # also show the 100% polygon
+main="Partial AUC (pAUC)")
+```
+
+
+# 11. Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
+
+# 12. Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions? 
+
+[IC Added: I really liked this overview of the `caret` package and its capabilities. https://www.machinelearningplus.com/machine-learning/caret-package/]
+
+# 13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?
