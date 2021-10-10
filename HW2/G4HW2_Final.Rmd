@@ -1,7 +1,7 @@
 ---
 title: "Data 621 - Homework 2"
 author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
-date: "OCtober 10, 2021"
+date: "October 10, 2021"
 output: pdf_document
 ---
 
@@ -181,8 +181,29 @@ print(paste("F1 Score: ", F1_score(df)))
 ```
 
 # 9. Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. 
+(Hint:  If $0 < a < 1$ and $0 < b < 1$ then $ab < a$.)
 
-*(Hint:  If $0 < a < 1$ and $0 < b < 1$ then $ab < a$.)*
+The maximum theoretical score for both precision and sensitivity is 1. The theoretical minimum for both is 0. By plugging in these values to the F1 score formula, we demonstrate that any score for precision and sensitivity could fall between 0, the theoretical minimum and 1, the theoretical maximum. If both sensitivty and precision are zero, the result is undefined. Even so, if either is zero and the other is greater than zero, the overall F1 score must also be zero.
+
+### Maximum
+
+$F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
+
+$p = 1$
+$s = 1$
+
+$F1\ Score= \frac{2 * 1 * 1}{1 + 1}= \frac{2}{2}= 1$
+
+### Minimum
+
+$F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
+
+$p = 0$
+$s = 0$
+
+$F1\ Score= \frac{2 * 0 * 0}{0 + 0}= \frac{0}{0}= undefined$
+
+```
 
 # 10. Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). 
 
