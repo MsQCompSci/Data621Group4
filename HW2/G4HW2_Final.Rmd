@@ -2,7 +2,9 @@
 title: "Data 621 - Homework 2"
 author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
 date: "October 10, 2021"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE, tidy=TRUE}
@@ -185,25 +187,69 @@ print(paste("F1 Score: ", F1_score(df)))
 
 The maximum theoretical score for both precision and sensitivity is 1. The theoretical minimum for both is 0. By plugging in these values to the F1 score formula, we demonstrate that any score for precision and sensitivity could fall between 0, the theoretical minimum and 1, the theoretical maximum. If both sensitivty and precision are zero, the result is undefined. Even so, if either is zero and the other is greater than zero, the overall F1 score must also be zero.
 
-### Maximum
+
+###By definition, Precision and Sensitivity can only have values between 0 and 1.
+
+
+### Let's consider that Maximum case
+
+
+If $Precision = 1$ and $Sensitivity = 1, then:$
 
 $F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
 
-$p = 1$
-$s = 1$
 
-$F1\ Score= \frac{2 * 1 * 1}{1 + 1}= \frac{2}{2}= 1$
+$F1\ Score= \frac{2 * 1 * 1}{1 + 1}= \frac{2}{2}= 1$                                **(a)** 
 
-### Minimum
+### Let's consider Mininum cases
+
+If $Precision = 0$ and $0 < Sensitivity < 1$, then:
 
 $F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
 
-$p = 0$
-$s = 0$
+$F1\ Score= \frac{2 * 0 * Sensitivity}{0 + Sensitivity}= \frac{0}{Sensitivity}= 0$  **(b)**
 
-$F1\ Score= \frac{2 * 0 * 0}{0 + 0}= \frac{0}{0}= undefined$
+--
 
-```
+If $0 < Precision < 1$ and $Sensitivity = 0$, then:
+
+$F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
+
+$F1\ Score= \frac{2 * Precision * 0}{Precision + 0}= \frac{0}{Precision}= 0$        **(c)**
+
+
+
+### Let's consider the undefined case
+
+If $Precision = 0$ and $Sensitivity = 0$, then:
+
+$F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
+
+$F1\ Score= \frac{2 * 0 * 0}{0 + 0}= \frac{0}{0} = Undefined$
+
+
+### Let's consider other cases
+
+
+If $0 < Precision < 1$  and $ 0 < Sensitivity 1, then:$
+
+
+By definition $F1\ Score= \frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$    **(d)**
+
+We also know that, for any two real numbers a,b: if $0 < a < 1$ and $0 < b < 1$ then $ab < a$
+
+Then, $Precision * Sensitivity < Precision$ 
+
+So, the numerator "$2 * Precision * Sensitivity$" of the right side of equation **(d)**, will 
+be less than its denominator "$Precision + Sensitivity$"
+
+Consequently, the right side of equation **(d)** will take values in the interval $<0, 1>$  **(f)**
+
+Finally, from results **(a)**, **(b)**, and **(f)**, we conclude that F1-Score can only take values between 0 and 1.
+
+
+
+
 
 # 10. Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). 
 
@@ -322,6 +368,8 @@ AUC <- ROC_list[[2]]
 
 [IC Added: I really liked this overview of the `caret` package and its capabilities. https://www.machinelearningplus.com/machine-learning/caret-package/]
 
+
+
 ```{r}
 
 # Calculate the confusion matrix using Caret function
@@ -362,14 +410,22 @@ colnames(comparison_df) <- c("Performance Measure",
                              "Caret function result",
                              "Custom function result",
                              "Difference")
+```
+
+The table below shows the comparisons of the performance metrics between the Caret library's functions and our custom functions. In most cases we got the same results after rounding to 4 decimals. There is a minor difference for the F1 Score.
+
+We did not find an equivalent function in the Caret library for the Classification Error Rate.
 
 
+
+```{r}
 # Show results comparison
 kable(comparison_df) %>%
   kable_styling()
-
-
 ```
+
+
+
 
 # 13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?
 
@@ -390,6 +446,10 @@ AUC <- ROC_list[[2]]
  
 ROC_plot
 ```
+
+Comparing the results of our custom functions vs the pROC's, we can see that the plots look very similar.
+
+We can also see that our function returned AUC = 0.8299, while the pROC's version returned 0.8503. Our custom function result is very close to the library's.
 
 
 
