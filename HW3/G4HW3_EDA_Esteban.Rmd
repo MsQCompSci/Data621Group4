@@ -1,0 +1,308 @@
+---
+title: "Data 621 - Homework 3"
+author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+geometry: margin=0.60in
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE, echo = FALSE)
+```
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#libraries
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(DataExplorer)
+```
+
+
+# Overview
+
+In this homework assignment, you will explore, analyze and model a data set containing information on crime for various neighborhoods of a major city. Each record has a response variable indicating whether or not the crime rate is above the median crime rate (1) or not (0).
+Your objective is to build a binary logistic regression model on the training data set to predict whether the neighborhood will be at risk for high crime levels. You will provide classifications and probabilities for the evaluation data set using your binary logistic regression model. You can only use the variables given to you (or variables that you derive from the variables provided). Below is a short description of the variables of interest in the data set:
+
+- zn: proportion of residential land zoned for large lots (over 25000 square feet) (predictor variable)
+- indus: proportion of non-retail business acres per suburb (predictor variable)
+- chas: a dummy var. for whether the suburb borders the Charles River (1) or not (0) (predictor variable)
+- nox: nitrogen oxides concentration (parts per 10 million) (predictor variable)
+- rm: average number of rooms per dwelling (predictor variable)
+- age: proportion of owner-occupied units built prior to 1940 (predictor variable)
+- dis: weighted mean of distances to five Boston employment centers (predictor variable)
+- rad: index of accessibility to radial highways (predictor variable)
+- tax: full-value property-tax rate per $10,000 (predictor variable)
+- ptratio: pupil-teacher ratio by town (predictor variable)
+- black: 1000(Bk - 0.63)2 where Bk is the proportion of blacks by town (predictor variable)
+- lstat: lower status of the population (percent) (predictor variable)
+- medv: median value of owner-occupied homes in $1000s (predictor variable)
+- target: whether the crime rate is above the median crime rate (1) or not (0) (response variable)
+
+
+
+# 1. Data Exploration
+
+
+```{r}
+# Read training and evaluation data from Github repository
+
+crime_train <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv")
+crime_eval <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv")
+```
+
+## Initial data inspection
+
+Let's take a glance at the training data.
+
+$~$
+
+```{r}
+knitr::kable(head(crime_train, 10), booktabs = TRUE) 
+```
+
+
+## Metrics on training data set
+
+
+To get acquainted with the training data set, let's get some metrics on it.
+
+$~$
+
+```{r}
+
+train_intro <- DataExplorer::introduce(crime_train)
+
+train_metrics <- train_intro %>%
+   pivot_longer(colnames(train_intro), names_to = "Metric", values_to = "Count")
+
+knitr::kable(train_metrics, booktabs = TRUE)
+
+```
+
+$~$
+
+Let's visualize the observed metrics on the training data set.
+
+
+```{r}
+DataExplorer::plot_intro(crime_train)
+```
+
+- We can see that most of the variables appear to be continuous. But, from the description of the predictors in the overview section of this document, we know that some of them can be treated as discrete and/or categorical. We will know more later when we test for value uniqueness.
+- No columns with missing values were detected.
+- All rows are complete.
+
+
+
+## Summary statistics per variable
+
+Below are the summary statistics for all variables in the training data set.
+
+```{r}
+summary(crime_train)
+```
+
+## Missing values
+
+```{r}
+DataExplorer::plot_missing(crime_train)
+```
+
+From the chart we do not see any variable with missing values.
+
+## Histograms
+
+Let's visualize distributions for all continuous features:
+
+```{r}
+DataExplorer::plot_histogram(crime_train)
+```
+
+- None of the predictor variables seem to be nearly normal with exception of perhaps "rm". 
+- Multiple predictors appear to be skewed such as "age", "dis", "lstat", "ptratio". It will be necessary to apply transformations to these.
+- Outliers can be seen for predictors "dis", "indus", "lstat", "nox", "ptratio", "rad", "rm", "tax", and "zn". Later, we will verify this using box plots.
+
+
+## QQ Plots
+
+
+- Let's use Quantile-Quantile plots to visualize the deviation of the predictors compared to the normal distribution.
+
+```{r}
+qq_train_data <- crime_train[, c("age", "dis", "indus", "lstat",
+                                 "medv", "nox", "ptratio", "rad",
+                                 "rm", "tax", "zn")]
+
+DataExplorer::plot_qq(qq_train_data, nrow = 4L, ncol = 3L)
+```
+
+
+- It appears that, with exception of the "chas" predictor, all other predictors will need to be transformed for linear regression.
+
+- Let's apply a simple log transformation and plot them again to see any difference can be observed.
+
+```{r}
+log_qq_train_data <- DataExplorer::update_columns(qq_train_data,
+                                                  ind = names(qq_train_data),
+                                                  what = log)
+
+DataExplorer::plot_qq(log_qq_train_data, nrow = 4L, ncol = 3L)
+```
+
+- The distributions look better now. So, as part of the data preparation we will transform the necessary predictors before we use them for the models.
+
+
+## Boxplot Analysis
+
+- Let's generate box plots for all the feature variables. 
+- Let's also apply a log re-scaling to better compare the values across variables using a common scale.
+- Let's use notches to compare groups. If the notches of two boxes do not overlap, then this suggests that the medians are significantly different.
+
+
+```{r}
+ggplot(stack(crime_train), aes(x = ind, y = values)) +
+  geom_boxplot(color = "darkblue",
+               fill = "lightblue",
+               alpha = 0.2,
+               outlier.color = "red",
+               outlier.fill = "red",
+               outlier.alpha = 0.2,
+               notch = TRUE) + 
+  labs(title = "Boxplot of all feature variables") + 
+  scale_y_log10()
+```
+
+We can see obvious outliers for variables "indus", "rm", "age","ptratio" "lstat", and "medv".
+
+$~$
+
+## Most Common Values for outlier variables
+
+```{r}
+knitr::kable(crime_train %>%
+  group_by(indus) %>%
+  summarise(n = n()) %>%
+  mutate(Freq = n/sum(n)) %>%
+  arrange(desc(n)) %>%
+  top_n(5)
+  ,booktabs = TRUE)
+```
+
+```{r}
+knitr::kable(crime_train %>%
+  group_by(rm) %>%
+  summarise(n = n()) %>%
+  mutate(Freq = n/sum(n)) %>%
+  arrange(desc(n)) %>%
+  top_n(5)
+  ,booktabs = TRUE)
+```
+
+```{r}
+knitr::kable(crime_train %>%
+  group_by(age) %>%
+  summarise(n = n()) %>%
+  mutate(Freq = n/sum(n)) %>%
+  arrange(desc(n)) %>%
+  top_n(5), booktabs = TRUE)
+```
+
+```{r}
+knitr::kable(crime_train %>%
+  group_by(ptratio) %>%
+  summarise(n = n()) %>%
+  mutate(Freq = n/sum(n)) %>%
+  arrange(desc(n)) %>%
+  top_n(5), booktabs = TRUE)
+```
+
+```{r}
+knitr::kable(crime_train %>%
+  group_by(lstat) %>%
+  summarise(n = n()) %>%
+  mutate(Freq = n/sum(n)) %>%
+  arrange(desc(n)) %>%
+  top_n(3), booktabs = TRUE)
+```
+
+```{r}
+knitr::kable(crime_train %>%
+  group_by(medv) %>%
+  summarise(n = n()) %>%
+  mutate(Freq = n/sum(n)) %>%
+  arrange(desc(n)) %>%
+  top_n(5), booktabs = TRUE)
+```
+
+
+
+
+## Correlation Analysis
+
+Let's use a heatmap to visualize correlation for all features:
+
+```{r}
+  DataExplorer::plot_correlation(crime_train)
+```
+
+- We see significant correlation between the variables below:
+
+    Var1  | Var2   | Correlation
+    ------| -------|-------------
+    rad   | tax    |       0.91
+    indus | nox    |       0.76
+    nox   | age    |       0.74
+    indus | tax    |       0.73
+    nox   | target |       0.73*
+    rm    | medv   |       0.71
+    age   | target |       0.63*
+    rad   | target |       0.03*
+    tax   | target |       0.61*
+
+
+
+# 2. Data Preparation
+
+
+# 3. Build Models
+
+
+# 4. Select Models
+
+
+
+
+
+
+<!-- ## Figures -->
+
+<!-- The figure sizes have been customised so that you can easily put two images side-by-side.  -->
+
+<!-- ```{r, fig.show='hold'} -->
+<!-- plot(1:10) -->
+<!-- plot(10:1) -->
+<!-- ``` -->
+
+<!-- You can enable figure captions by `fig_caption: yes` in YAML: -->
+
+<!--     output: -->
+<!--       rmarkdown::html_vignette: -->
+<!--         fig_caption: yes -->
+
+<!-- Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**. -->
+
+<!-- ## More Examples -->
+
+<!-- You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`. -->
+
+<!-- ```{r, echo=FALSE, results='asis'} -->
+<!-- knitr::kable(head(mtcars, 10)) -->
+<!-- ``` -->
+
+<!-- Also a quote using `>`: -->
+
+<!-- > "He who gives up [code] safety for [code] speed deserves neither." -->
+<!-- ([via](https://twitter.com/hadleywickham/status/504368538874703872)) -->
