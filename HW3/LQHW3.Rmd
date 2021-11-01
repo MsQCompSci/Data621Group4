@@ -1,0 +1,211 @@
+---
+title: "Data 621 Homework 3"
+author: "Layla Quinones"
+date: "10/24/2021"
+output: pdf_document
+---
+
+# Libraries
+
+```{r, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+```
+
+# EDA
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv", header = TRUE, stringsAsFactors = FALSE)
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv")
+```
+
+
+```{r}
+# check to see if we need to clean the data 
+# gives us a sense of what each predictor is 
+glimpse(rawTrain)
+
+# All varaibles are numeric
+# categorical variables
+# chas
+
+#dicrete
+#rad, zn, tax
+
+#all others are continuous
+```
+
+### No Missing Values 
+
+```{r}
+#plot missing values using VIM package
+aggr(rawTrain , col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(rawTrain), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+```{r}
+#plot missing values using VIM package
+aggr(rawTest , col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(rawCSV), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+
+```
+
+## Correlation
+
+```{r}
+#correlation matrix for predictors
+ggcorr(rawTrain%>% select(zn:medv))
+```
+
+```{r}
+#Idetify highly correlated variables
+ggcorr(rawTrain%>% select(zn:medv))
+```
+
+```{r}
+#Lets look at some highly correlated variables and drop them
+findCorrelation(cor(rawTrain%>% select(zn:medv)),
+                cutoff = 0.75,
+                verbose = TRUE,
+                names = TRUE)
+
+# There are 4 highly correlated variables
+# I will drop the highest one which is tax which seems to be the most highly correlated
+#tax and rad are 0.9 correlated lets look at their relationship to the predictor to see which one to drop
+```
+
+
+## Distribution of Predictors
+
+ADD VARIANCE AND INFLATION FACTORS TO THIS SECTION
+
+```{r}
+par(mfrow = c(3,3))
+for(i in 1:ncol(rawTrain)) {#distribution of each variable
+  hist(rawTrain[[i]], main = colnames(rawTrain[i]), col = "red")
+}
+
+#binomial data 
+# indus, tax and rad
+
+#all other variables ar skewed excpet RM
+```
+
+## Box Plots
+
+```{r}
+#make long
+#tax and age has a much different scale so we are seperating it here
+longData <- rawTrain %>%
+  select(-tax, -age) %>%
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Crime Data Variables", y="Value")
+
+
+#we can see that zn, medv and lstat has MANY outliers
+```
+
+
+```{r}
+#make long
+#tax and age has a much different scale so we are seperating it here
+longData <- rawTrain %>%
+  select(tax, age) %>%
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Crime Data Variables", y="Value")
+
+
+# no outliers for tax and age
+```
+
+# Model Building
+
+
+```{r}
+#remove Tax due to high correlation with other variables
+modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = rawTrain, family = "binomial")
+
+modelOne
+```
+
+
+```{r}
+# squared transformation to age and lstat
+
+#age before squared
+summary(rawTrain$age)
+```
+
+```{r, message = FALSE, warning = FALSE}
+#age before squared
+qplot(rawTrain$age)
+```
+
+```{r, message = FALSE, warning = FALSE}
+#age after squared
+qplot((rawTrain$age)^(2))
+```
+
+
+```{r}
+#lstat before log
+summary(rawTrain$lstat)
+```
+
+```{r, message = FALSE, warning = FALSE}
+#lstat before log
+qplot(rawTrain$lstat)
+```
+
+```{r, message = FALSE, warning = FALSE}
+#lstat afterlog
+qplot(log10(rawTrain$lstat))
+```
+
+```{r}
+#remove Tax squared age and log lstat
+modelTwo <- glm(target ~ zn + indus + chas + nox + rm + age^2 + dis + rad + ptratio + log10(lstat) + medv , data = rawTrain, family = "binomial")
+
+modelTwo
+```
+
+```{r}
+#remove Tax squared age and log lstat - log dis and zn
+modelThree <- glm(target ~ log10(zn + 1) + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio + log10(lstat) + medv , data = rawTrain, family = "binomial")
+
+modelThree
+```
+
+```{r}
+#remove Tax squared age and log lstat - log dis - log zn
+modelFour <- glm(target ~ zn + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio + log10(lstat) + medv , data = rawTrain, family = "binomial")
+
+modelFour
+```
+
+NEXT I WANT TO TRY BOX COX TRANSFORMATIONS
+
+WEE NEED QQ PLOTS AND ACCURACY
