@@ -13,6 +13,7 @@ library(ggplot2)
 library(VIM)
 library(GGally)
 library(caret)
+library(broom)
 ```
 
 # EDA
@@ -141,12 +142,20 @@ ggplot(longData, aes(Variable, Value, fill = Variable)) +
 # no outliers for tax and age
 ```
 
+
+```{r}
+#Train/Test Split
+dt = sort(sample(nrow(rawTrain), nrow(rawTrain)*.8))
+train<-rawTrain[dt,]
+test<-rawTrain[-dt,]
+
+```
 # Model Building
 
 
 ```{r}
 #remove Tax due to high correlation with other variables
-modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = rawTrain, family = "binomial")
+modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = train, family = "binomial")
 
 modelOne
 ```
@@ -156,56 +165,134 @@ modelOne
 # squared transformation to age and lstat
 
 #age before squared
-summary(rawTrain$age)
+summary(train$age)
 ```
 
 ```{r, message = FALSE, warning = FALSE}
 #age before squared
-qplot(rawTrain$age)
+qplot(train$age)
 ```
 
 ```{r, message = FALSE, warning = FALSE}
 #age after squared
-qplot((rawTrain$age)^(2))
+qplot((train$age)^(2))
 ```
 
 
 ```{r}
 #lstat before log
-summary(rawTrain$lstat)
+summary(train$lstat)
 ```
 
 ```{r, message = FALSE, warning = FALSE}
 #lstat before log
-qplot(rawTrain$lstat)
+qplot(train$lstat)
 ```
 
 ```{r, message = FALSE, warning = FALSE}
 #lstat afterlog
-qplot(log10(rawTrain$lstat))
+qplot(log10(train$lstat))
 ```
 
 ```{r}
 #remove Tax squared age and log lstat
-modelTwo <- glm(target ~ zn + indus + chas + nox + rm + age^2 + dis + rad + ptratio + log10(lstat) + medv , data = rawTrain, family = "binomial")
+modelTwo <- glm(target ~ zn + indus + chas + nox + rm + age^2 + dis + rad + ptratio + log10(lstat) + medv , data = train, family = "binomial")
 
 modelTwo
+
+#This one has a litter lower AIC
 ```
 
 ```{r}
-#remove Tax squared age and log lstat - log dis and zn
-modelThree <- glm(target ~ log10(zn + 1) + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio + log10(lstat) + medv , data = rawTrain, family = "binomial")
+#remove Tax squared age and log lstat - log dis and zn +1
+modelThree <- glm(target ~ log10(zn + 1) + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio + log10(lstat) + medv , data = train, family = "binomial")
 
 modelThree
+
+#AIC is lower again
 ```
 
 ```{r}
-#remove Tax squared age and log lstat - log dis - log zn
-modelFour <- glm(target ~ zn + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio + log10(lstat) + medv , data = rawTrain, family = "binomial")
+#add lstat*age
+modelFour <- glm(target ~ log10(zn+ 1) + indus  + nox + rm  + log10(dis) + rad + ptratio + medv + lstat*age + age^2 + log10(lstat) + chas, data = rawTrain, family = "binomial")
 
 modelFour
+
+#Here I decided to take lstat and age and multiply them because age is highly correlated and lstat is skewed (come up with a better reason)
 ```
 
-NEXT I WANT TO TRY BOX COX TRANSFORMATIONS
+# Test Models
+
+```{r}
+#Make predictions
+predOne = predict(modelOne,test, type = "response")
+predTwo = predict(modelTwo,test, type = "response")
+predThree = predict(modelThree,test, type = "response")
+predFour = predict(modelFour,test, type = "response")
+
+#measure accuracy
+postResample(pred = predOne, obs = test$target)
+```
+
+```{r}
+#measure accuracy
+postResample(pred = predTwo, obs = test$target)
+```
+
+
+```{r}
+#measure accuracy
+postResample(pred = predThree, obs = test$target)
+```
+
+
+```{r}
+#measure accuracy
+postResample(pred = predFour, obs = test$target)
+```
+
+## Confusion Matric and Accuracy Measurment
+
+```{r}
+
+resultsFit<- ifelse(predOne > 0.5,1,0)
+resultsFit <- as.factor(resultsFit)
+#confusionMatrix(test$target, resultsFit)
+resultsFit
+```
+
+## Anova Tests for each model
+
+```{r}
+#Looking at strength of variables
+anova(modelOne, test = 'Chisq')
+```
+
+```{r}
+#Looking at strength of variables
+anova(modelTwo, test = 'Chisq')
+```
+
+```{r}
+#Looking at strength of variables
+anova(modelThree, test = 'Chisq')
+```
+
+
+
+NEXT I WANT TO TRY BOX COX TRANSFORMATIONS on things we deleted?
+
+```{r}
+#Looking at strength of variables (now we have all strong variables)
+anova(modelFour, test = 'Chisq')
+```
+
+```{r}
+
+
+```
 
 WEE NEED QQ PLOTS AND ACCURACY
+
+
+AUC or ROC curve
