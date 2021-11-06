@@ -3,6 +3,7 @@ title: "Data 621 - Homework 3"
 author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
 date: "`r Sys.Date()`"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 geometry: margin=0.60in
@@ -82,6 +83,7 @@ knitr::kable(train_metrics, booktabs = TRUE)
 
 ```
 
+
 $~$
 
 Let's visualize the observed metrics on the training data set.
@@ -102,7 +104,7 @@ DataExplorer::plot_intro(crime_train)
 Below are the summary statistics for all variables in the training data set.
 
 ```{r}
-summary(crime_train)
+summary(crime_train, digits = 2)
 ```
 
 ## Missing values
@@ -121,9 +123,10 @@ Let's visualize distributions for all continuous features:
 DataExplorer::plot_histogram(crime_train)
 ```
 
-- None of the predictor variables seem to be nearly normal with exception of perhaps "rm". 
-- Multiple predictors appear to be skewed such as "age", "dis", "lstat", "ptratio". It will be necessary to apply transformations to these.
-- Outliers can be seen for predictors "dis", "indus", "lstat", "nox", "ptratio", "rad", "rm", "tax", and "zn". Later, we will verify this using box plots.
+- None of the predictor variables seem to be nearly normal with exception of perhaps `rm`. 
+- Multiple predictors appear to be skewed such as `age`, `dis`, `lstat`, `ptratio`. It will be necessary to apply transformations to these.
+- Possible outliers can be seen for predictors `dis`, `indus`, `lstat`, `nox`, `ptratio`, `rad`, `rm`, `tax`, and `zn`. Later, we will verify this using box plots.
+- Multiple modes can be observed for variables `indus`, `rad`, and `tax`. 
 
 
 ## QQ Plots
@@ -175,66 +178,151 @@ ggplot(stack(crime_train), aes(x = ind, y = values)) +
   scale_y_log10()
 ```
 
-We can see obvious outliers for variables "indus", "rm", "age","ptratio" "lstat", and "medv".
+The boxplots confirm that there are obvious outliers for variables `age`, `indus`, `lstat`, `medv`, `ptratio`, and `rm`. These outliers will need to be imputed to prevent them from skewing the results of the  modeling.
 
 $~$
 
-## Most Common Values for outlier variables
+## Unique Value Counts per Variable
+
+
+Let's count unique values per variable to see which variables might need to be converted to factors if they have small number of unique values.
+
+$~$
 
 ```{r}
-knitr::kable(crime_train %>%
-  group_by(indus) %>%
-  summarise(n = n()) %>%
-  mutate(Freq = n/sum(n)) %>%
-  arrange(desc(n)) %>%
-  top_n(5)
-  ,booktabs = TRUE)
+uniq_val_counts_df <- data.frame(
+c(
+  'age'
+  ,'chas'
+  ,'dis'
+  ,'indus'
+  ,'lstat'
+  ,'medv'
+  ,'nox'
+  ,'ptratio'
+  ,'rad'
+  ,'rm'
+  ,'target'
+  ,'tax'
+  ,'zn'
+)
+,c(
+ length(unique(crime_train$age))
+,length(unique(crime_train$chas))
+,length(unique(crime_train$dis))
+,length(unique(crime_train$indus))
+,length(unique(crime_train$lstat))
+,length(unique(crime_train$medv))
+,length(unique(crime_train$nox))
+,length(unique(crime_train$ptratio))
+,length(unique(crime_train$rad))
+,length(unique(crime_train$rm))
+,length(unique(crime_train$target))
+,length(unique(crime_train$tax))
+,length(unique(crime_train$zn))
+)
+)
+
+names(uniq_val_counts_df) <- c('variable', 'unique.value.count')
+
+knitr::kable(uniq_val_counts_df, booktabs = TRUE)
 ```
 
-```{r}
-knitr::kable(crime_train %>%
-  group_by(rm) %>%
-  summarise(n = n()) %>%
-  mutate(Freq = n/sum(n)) %>%
-  arrange(desc(n)) %>%
-  top_n(5)
-  ,booktabs = TRUE)
-```
+$~$
+
+## Convert Categorical variables to factors
+
+From the unique counts above, we can see that the variables `chas` and `target` can be considered as categorical variables due to their low number of unique values. so, we are converting them to factor data type.
 
 ```{r}
-knitr::kable(crime_train %>%
-  group_by(age) %>%
-  summarise(n = n()) %>%
-  mutate(Freq = n/sum(n)) %>%
-  arrange(desc(n)) %>%
-  top_n(5), booktabs = TRUE)
+crime_train$chas <- as.factor(crime_train$chas)
+crime_train$target <- as.factor(crime_train$target)
 ```
 
-```{r}
-knitr::kable(crime_train %>%
-  group_by(ptratio) %>%
-  summarise(n = n()) %>%
-  mutate(Freq = n/sum(n)) %>%
-  arrange(desc(n)) %>%
-  top_n(5), booktabs = TRUE)
-```
+$~$
+
+<!-- Let's look at the most popular values per variable. -->
+
+<!-- $~$ -->
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(rad) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) -->
+<!--   ,booktabs = TRUE) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(indus) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(5) -->
+<!--   ,booktabs = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(rm) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(5) -->
+<!--   ,booktabs = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(age) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(5), booktabs = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(ptratio) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(5), booktabs = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(lstat) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(3), booktabs = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- knitr::kable(crime_train %>% -->
+<!--   group_by(medv) %>% -->
+<!--   summarise(n = n()) %>% -->
+<!--   mutate(Freq = n/sum(n)) %>% -->
+<!--   arrange(desc(n)) %>% -->
+<!--   top_n(5), booktabs = TRUE) -->
+<!-- ``` -->
+
+$~$
+
+## Outlier Value Analysis
+
+Let's analyze the variables with outliers and their relation to the `target` variable.
 
 ```{r}
-knitr::kable(crime_train %>%
-  group_by(lstat) %>%
-  summarise(n = n()) %>%
-  mutate(Freq = n/sum(n)) %>%
-  arrange(desc(n)) %>%
-  top_n(3), booktabs = TRUE)
-```
+pred_vs_target <- gather(crime_train, variable, value, -c(chas,target))
 
-```{r}
-knitr::kable(crime_train %>%
-  group_by(medv) %>%
-  summarise(n = n()) %>%
-  mutate(Freq = n/sum(n)) %>%
-  arrange(desc(n)) %>%
-  top_n(5), booktabs = TRUE)
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
 ```
 
 
@@ -267,7 +355,116 @@ Let's use a heatmap to visualize correlation for all features:
 # 2. Data Preparation
 
 
+
+
+
+## Outlier imputation
+
+The boxplots above confirm that there are obvious outliers for variables `dis`, `indus`, `lstat`, `medv`, `ptratio`, `rm`, `tax`, and `zn`. These outliers  need to be imputed to prevent them from skewing the results of the  modeling.
+
+Let's impute outliers with median values.
+
+```{r}
+crime_train_preped <- crime_train %>%
+  mutate(
+    dis     = ifelse(dis > 7.5, median(dis), dis),
+    indus   = ifelse(indus > 21, median(indus), indus),
+    lstat   = ifelse(lstat > 25, median(lstat), lstat),
+    medv    = ifelse(medv > 30 | medv < 10, median(medv), medv),
+    ptratio = ifelse(ptratio < 15.0, median(ptratio), ptratio),
+    rm      = ifelse(rm > 7.2 | rm < 5.4, median(rm), rm),
+    tax     = ifelse(tax > 700.0, median(tax), tax),
+    zn      = ifelse(zn > 80, median(zn), zn)
+  )
+```
+
+After imputing the variables with outliers, let's analyze them again with respect to their relation to the `target` variable. This is to ensure that outliers have been eliminated or at least minimized as much as possible.
+
+```{r}
+pred_vs_target <- gather(crime_train_preped, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+```
+
+
 # 3. Build Models
+
+Using the training data, build at least three different binary logistic regression models, using different variables (or the same variables with different transformations). You may select the variables manually, use an approach such as Forward or Stepwise, use a different approach, or use a combination of techniques. Describe the techniques you used. If you manually selected a variable for inclusion into the model or exclusion into the model, indicate why this was done.
+
+Be sure to explain how you can make inferences from the model, as well as discuss other relevant model output. Discuss the coefficients in the models, do they make sense? Are you keeping the model even though it is counter intuitive? Why? The boss needs to know.
+
+
+## Model 0: Generalized Linear model
+
+Let's begin with building a initial model including all the variables.
+
+```{r}
+crime_glm <- glm(crime_train_preped, family = 'binomial',
+                 formula = target ~ .)
+
+summary(crime_glm)
+
+```
+
+
+
+
+## Model 1: Backward Selection model
+
+Let's build a backward step-wise selection based on AIC.
+
+```{r}
+library(MASS)
+
+modedl1 <- crime_glm %>%
+  stepAIC(direction = "backward", trace = FALSE)
+
+summary(modedl1)
+```
+
+
+
+
+## Model 2: Forward Selection model
+
+Let's build a forward step-wise selection based on AIC.
+
+
+```{r}
+emptyModel <- glm(target ~ 1,
+                  data = crime_train_preped,
+                  family = "binomial")
+
+model2 <- emptyModel %>%
+  stepAIC(direction = "forward",
+          scope = ~ zn + indus + chas + nox + rm + age + dis 
+                    + rad + tax + ptratio + lstat + medv,
+          trace = FALSE)
+
+summary(model2)
+
+```
+
+
+## Model 3: Generalized Linear Regression model with classification mode
+
+```{r}
+
+library(tidymodels)
+
+fitted_logistic_model<- logistic_reg() %>%
+        # Set the engine
+        set_engine("glm") %>%
+        # Set the mode
+        set_mode("classification") %>%
+        # Fit the model
+        fit(target ~ ., data = crime_train_preped)
+
+tidy(fitted_logistic_model)    # Generate Summary Table
+```
+
 
 
 # 4. Select Models
