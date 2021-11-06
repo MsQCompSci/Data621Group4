@@ -1,0 +1,73 @@
+---
+title: "Data 621 - Homework 3"
+author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo"
+date: "October 23, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, tidy=TRUE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+```{r message=FALSE}
+library(kableExtra)
+library(tidyverse)
+library(tidymodels)
+library(naniar)
+#library(caret)
+#library(pROC)
+
+```
+  
+1. DATA EXPLORATION
+
+```{r}
+training_data_url = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv"
+evaluation_data_url = "https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv"
+df_tr <- read.csv(training_data_url)
+df_eval = read.csv(evaluation_data_url)
+```
+
+Dimensions
+```{r}
+print(paste("dimensions of training data set: "))
+dim(df_tr)
+print(paste("dimensions of evaluation data set: "))
+dim(df_eval)
+```
+
+Structure of training data set
+```{r}
+str(df_tr)
+```
+Structure of evaluation data set
+```{r}
+str(df_eval)
+```
+
+Summary
+The below is a summary extracted from our given training data.
+```{r}
+train.summary <- data.frame(unclass(summary(df_tr[2:13])),
+check.names = FALSE,
+row.names = NULL,
+stringsAsFactors = FALSE)
+train.summary
+```
+
+2. DATA PREPARATION
+
+Check for crime for various neighborhoods missing data
+```{r}
+gg_miss_var(df_tr) +
+  labs(title="Crime for various neighborhoods")
+```
+
+
+3. BUILD MODELS
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model_1 <- lm(target ~ ., data = df_tr)
+plot(model_1)
+```
+

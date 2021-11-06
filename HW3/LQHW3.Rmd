@@ -1,0 +1,331 @@
+---
+title: "Data 621 Homework 3"
+author: "Layla Quinones"
+date: "10/24/2021"
+output: pdf_document
+---
+
+# Libraries
+
+```{r, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+```
+
+# EDA
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv", header = TRUE, stringsAsFactors = FALSE)
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv")
+```
+
+
+```{r}
+# check to see if we need to clean the data 
+# gives us a sense of what each predictor is 
+glimpse(rawTrain)
+
+# All varaibles are numeric
+# categorical variables
+# chas
+
+#dicrete
+#rad, zn, tax
+
+#all others are continuous
+```
+
+### No Missing Values 
+
+```{r}
+#plot missing values using VIM package
+aggr(rawTrain , col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(rawTrain), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+## Correlation
+
+```{r}
+#correlation matrix for predictors
+ggcorr(rawTrain%>% select(zn:medv))
+```
+
+```{r}
+#Lets look at some highly correlated variables and drop them
+findCorrelation(cor(rawTrain%>% select(zn:medv)),
+                cutoff = 0.75,
+                verbose = TRUE,
+                names = TRUE)
+
+# There are 4 highly correlated variables
+# I will drop the highest one which is tax which seems to be the most highly correlated
+#tax and rad are 0.9 correlated lets look at their relationship to the predictor to see which one to drop
+```
+
+
+## Distribution of Predictors
+
+ADD VARIANCE AND INFLATION FACTORS TO THIS SECTION?
+
+```{r}
+par(mfrow = c(3,3))
+for(i in 1:ncol(rawTrain)) {#distribution of each variable
+  hist(rawTrain[[i]], main = colnames(rawTrain[i]), col = "red")
+}
+
+#binomial data 
+# indus, tax and rad
+
+#all other variables ar skewed excpet RM
+```
+
+## Box Plots
+
+```{r}
+#make long
+#tax and age has a much different scale so we are seperating it here
+longData <- rawTrain %>%
+  select(-tax, -age) %>%
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Crime Data Variables", y="Value")
+
+
+#we can see that zn, medv and lstat has MANY outliers
+```
+
+
+```{r}
+#make long
+#tax and age has a much different scale so we are seperating it here
+longData <- rawTrain %>%
+  select(tax, age) %>%
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData, aes(Variable, Value, fill = Variable)) + 
+  geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Crime Data Variables", y="Value")
+
+
+# no outliers for tax and age
+```
+
+
+```{r}
+#Train/Test Split
+
+dt <- createDataPartition(iris$Species, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+train<-rawTrain[dt,]
+test<-rawTrain[-dt,]
+
+```
+
+# Model Building
+
+
+```{r}
+#remove Tax due to high correlation with other variables
+modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = train, family = "binomial")
+
+modelOne
+```
+
+```{r}
+#remove Tax squared age and log lstat
+modelTwo <- glm(target ~ zn + indus + chas + nox + rm + age^2 + dis + rad + ptratio + log2(lstat) + medv , data = train, family = "binomial")
+
+modelTwo
+
+#This one has a litter lower AIC
+```
+
+```{r}
+summary(modelTwo)
+
+```
+
+```{r}
+#log10(zn + 1), log10(dis) and deleted log2(lstat) - not significant
+modelThree <- glm(target ~ log10(zn + 1) + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio  + medv, data = train, family = "binomial")
+
+modelThree
+
+#AIC is lower again (not sure if age^2 ishelpful)
+```
+
+```{r}
+summary(modelThree)
+```
+
+```{r}
+#combine rad and rm (multiplied) - they seemed to correspond in their distributions
+modelFour<- glm(target ~ log10(zn + 1) + indus + chas + nox +  age^2 + log10(dis) + rad*rm + ptratio  + medv, data = train, family = "binomial")
+
+modelFour
+
+#AIC is lower #Not sure what the rationale is for this working but it lowered the AIC numnber and Residual Deviance
+```
+
+```{r}
+summary(modelFour)
+```
+
+
+```{r}
+#delte indus
+modelFive<-glm(target ~ log10(zn+1)+ nox +  age^2 + log10(dis) + rad*rm + ptratio  + medv, data = train, family = "binomial")
+
+
+modelFive
+
+#AIC is higher #resiudal deviance is lower 
+# I looked at the histograms and looked for complementary shapes to decide what to multiply
+```
+
+### Variable importance
+
+```{r}
+summary(modelFive)
+#indus and zn are not important
+```
+
+```{r}
+#multiply ptratio*nox (remove squared from age)
+modelSix<- glm(target ~ log10(zn + 1) + age  + ptratio*nox + log10(dis) + rad*rm + medv, data = train, family = "binomial")
+
+modelSix
+
+#AIC is lower
+```
+
+```{r}
+summary(modelSix)
+
+```
+# Test Models
+
+```{r}
+#Make predictions
+predOne = predict(modelOne,test, type = "response")
+predTwo = predict(modelTwo,test, type = "response")
+predThree = predict(modelThree,test, type = "response")
+predFour = predict(modelFour,test, type = "response")
+predFive = predict(modelFive,test, type = "response")
+predSix = predict(modelSix,test, type = "response")
+```
+
+```{r}
+#Error Measures
+data.frame(modelOne = postResample(pred = predOne, obs = test$target), modelTwo = postResample(pred = predTwo, obs = test$target), modelThree = postResample(pred = predThree, obs = test$target), modelFour = postResample(pred = predFour, obs = test$target), modelFive = postResample(pred = predFive, obs = test$target), modelSix = postResample(pred = predSix, obs = test$target))
+
+#We can see RMSE is increasing which means the fit is better for every model - This doesnt reflect very well in our accuracy measuremnets because the training sample is too small. Model Six has a lower Rsquared which may indicate deleting indus lost information. 
+```
+
+## Confusion Matrix and Accuracy Measurment
+
+```{r}
+#Extract Accuracy
+
+#Model One
+#format predictions to binary
+resultsFitOne <- ifelse(predOne > 0.5,1,0)
+resultsFitOne <- as.factor(resultsFitOne)
+
+#Confusion Matrix to Extract Accuracy
+cOne <- confusionMatrix(as.factor(test$target),resultsFitOne)
+accOne <- as.data.frame(cOne$overall)[1]
+accOne<- accOne %>%
+  slice(1)
+
+
+#Model Two
+#format predictions to binary
+resultsFitTwo <- ifelse(predTwo > 0.5,1,0)
+resultsFitTwo <- as.factor(resultsFitTwo)
+
+#Confusion Matrix to Extract Accuracy
+cTwo <- confusionMatrix(resultsFitTwo, as.factor(test$target))
+accTwo <- as.data.frame(cTwo$overall)[1]
+accTwo<- accTwo %>%
+  slice(1)
+
+#Model Three
+#format predictions to binary
+resultsFitThree<- ifelse(predThree > 0.5,1,0)
+resultsFitThree <- as.factor(resultsFitThree)
+
+#Confusion Matrix to Extract Accuracy
+cThree <- confusionMatrix(resultsFitThree, as.factor(test$target))
+accThree <- as.data.frame(cThree$overall)[1]
+accThree<- accThree%>%
+  slice(1)
+
+#Model Four
+#format predictions to binary
+resultsFitFour<- ifelse(predFour > 0.5,1,0)
+resultsFitFour <- as.factor(resultsFitFour)
+
+#Confusion Matrix to Extract Accuracy
+cFour <- confusionMatrix(resultsFitFour, as.factor(test$target))
+accFour <- as.data.frame(cFour$overall)[1]
+accFour<- accFour%>%
+  slice(1)
+
+#Model Five
+#format predictions to binary
+resultsFitFive<- ifelse(predFive > 0.5,1,0)
+resultsFitFive <- as.factor(resultsFitFive)
+
+#Confusion Matrix to Extract Accuracy
+cFive <- confusionMatrix(resultsFitFive, as.factor(test$target))
+accFive <- as.data.frame(cFive$overall)[1]
+accFive<- accFive%>%
+  slice(1)
+
+
+#Model Six
+#format predictions to binary
+resultsFitSix<- ifelse(predSix > 0.5,1,0)
+resultsFitSix <- as.factor(resultsFitSix)
+
+#Confusion Matrix to Extract Accuracy
+cSix<- confusionMatrix(resultsFitSix, as.factor(test$target))
+accSix <- as.data.frame(cSix$overall)[1]
+accSix<- accSix%>%
+  slice(1)
+```
+
+```{r}
+#create a table with accuracies
+data.frame(c(accOne, accTwo, accThree, accFour,accFive, accSix))
+
+#Here we see that our best models are Five and Six in terms of accuracy
+```
+
+WE NEED QQ PLOTS OR SOME OTHER VISUAL TO HELP US TALK ABOUT GOODNESS OF FIT GETTING HIGHER ALTHOUGH THE ACCURACY IS NOT CHANGING SO WE CAN CHOOSE ONE (FIVE OR SIX)
+
+
+AUC or ROC curve
