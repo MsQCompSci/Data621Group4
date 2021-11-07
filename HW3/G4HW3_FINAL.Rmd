@@ -1,0 +1,788 @@
+---
+title: "Data 621 - Homework 3"
+author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo "
+date: "11/7/2021"
+output: pdf_document
+---
+# Overview
+
+## General Objective
+
+For this assignment, we will be exploring, analyzing, and modeling data related to crime statistics for various areas of a major U.S. city. The primary objective is to understand how, or if, variable indicate whether crime in a particular area will be above or below the median crime rate for the entire city. The models will be binary logistic regression using combinations or constructions of the variables provided.  
+
+## About the Data
+
+- zn: proportion of residential land zoned for large lots (over 25000 square feet) (predictor variable)
+- indus: proportion of non-retail business acres per suburb (predictor variable)
+- chas: a dummy var. for whether the suburb borders the Charles River (1) or not (0) (predictor variable)
+- nox: nitrogen oxides concentration (parts per 10 million) (predictor variable)
+- rm: average number of rooms per dwelling (predictor variable)
+- age: proportion of owner-occupied units built prior to 1940 (predictor variable)
+- dis: weighted mean of distances to five Boston employment centers (predictor variable)
+- rad: index of accessibility to radial highways (predictor variable)
+- tax: full-value property-tax rate per $10,000 (predictor variable)
+- ptratio: pupil-teacher ratio by town (predictor variable)
+- lstat: lower status of the population (percent) (predictor variable)
+- medv: median value of owner-occupied homes in $1000s (predictor variable)
+- target: whether the crime rate is above the median crime rate (1) or not (0) (response variable)
+
+## Libraries Used
+
+We use pretty standard packages for this assignment, including the ever-useful `tidyverse`, `ggplot2`, and `caret`. New additions for this assignment include `VIM`, `DataExplorer`, and `broom`. **(Code Appendix 1.1)**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(kableExtra)
+library(tidymodels)
+library(DataExplorer)
+library(psych)
+library(pROC)
+```
+
+# Data Exploration
+
+As usual, our data are stored on GitHub at our team's main repository for easy access across team members **(Code Appendix 2.2)**. The variables are data type doubles, except for two variables: `chas` and `target`. While these are integer data types, they will be treated as categorical factors . Taking a peek into the data, we can get a sense of the distribution and structure of the data set **(Code Appendix 2.3)**. More visuals will be required to look deeper, however. 
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv", header = TRUE, stringsAsFactors = FALSE)
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv")
+```
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+# check to see if we need to clean the data 
+# gives us a sense of what each predictor is 
+glimpse(rawTrain)
+
+# All varaibles are numeric
+# categorical variables
+# chas
+
+#dicrete
+#rad, zn, tax
+
+#all others are continuous
+```
+**Table 1. Glimpse of data structure (Code Appendix 2.4)**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+kable(describe(rawTrain),booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down")
+```
+
+## Missing Data Checks
+
+Following standard procedure, we check for any missing data in the set **(Code Appendix 2.5)**. It appears there are no missing values as the following figures demonstrate.Again, we can see that most of the variables appear to be continuous. From the description of the predictors in the overview section of this document, we know that some of them can be treated as discrete and/or categorical. No columns with missing values were detected and all rows are complete.
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#plot missing values using VIM package
+aggr(rawTrain , col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(rawTrain), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+**Figure 1. Plot missing values with VIM package**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+DataExplorer::plot_intro(rawTrain)
+```
+**Figure 2. Plot missing values with DataExplorer package**
+
+## Feature Histograms
+
+For each of the variables, these histograms in figure 3 **(Code Appendix 2.6)** provide a nice overview of each feature, its variation, and paths for potential transformations later on for model construction. Histograms are a quick way to see the shape of the distributions for each feature. Of note are the normally distributed variables, median home value and number of rooms per dwelling. The remaining features appear quite skewed, especially land zoning, distance from employment, tax value, and distance to radial highways. We can also begin to see the affect of outliers that we'll have to account for. 
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+DataExplorer::plot_histogram(rawTrain)
+```
+**Figure 3. Feature histograms**
+
+## Feature Boxplots
+
+This box plot visualization (Figure 4) **(Code Appendix 2.7)** gives us an idea of the outliers we have in each variable, but does not give us a good sense of the distribution. We can use the histograms (Figure 3) above to interpret shape. We apply a log re-scaling to better compare the values across variables using a common scale and use notches to compare groups. If the notches of two boxes do not overlap, then this suggests that the medians are significantly different.
+
+For the features we see significant outliers, we can decide to either throw out that variable out altogether and not consider it in our models or impute the outliers with median values. Before deciding on a course of action, we'll look at a few other things. 
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+ggplot(stack(rawTrain), aes(x = ind, y = values)) +
+  geom_boxplot(color = "darkblue",
+               fill = "lightblue",
+               alpha = 0.2,
+               outlier.color = "red",
+               outlier.fill = "red",
+               outlier.alpha = 0.2,
+               notch = TRUE) + 
+  labs(title = "Boxplot of all feature variables") + 
+  scale_y_log10()
+```
+**Figure 4. Feature box plots**
+
+## Feature QQ Plots
+
+The Quantile-Quantile, or QQ plots (figures 5 and 6) **(Code Appendix 2.8)** are used to visualize the deviation of the predictors compared to the normal distribution. It is rather normal to see tails on either side of the QQ as outliers will deviate significantly from the normal distribution. Too much and the feature will not be a good one to use as a predictor. 
+
+### QQ Plots
+
+Consistent with our other analysis of the features, `zn`, `rad`, and `tax` are not following the normal distribution enough to be helpful in our models, and with exception of the "chas" predictor, all other predictors will need to be transformed for linear regression. **(Code Appendix 2.8.1)**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+qq_train_data <- rawTrain[, c("age", "dis", "indus", "lstat",
+                                 "medv", "nox", "ptratio", "rad",
+                                 "rm", "tax", "zn")]
+
+DataExplorer::plot_qq(qq_train_data, nrow = 4L, ncol = 3L)
+```
+**Figure 5. Feature QQ plot**
+
+### Log QQ Plots
+
+With the log transformation, the distributions look better now. So, as part of the data preparation we will transform the necessary predictors before we use them for the models. **(Code Appendix 2.8.2)**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+log_qq_train_data <- DataExplorer::update_columns(qq_train_data,
+                                                  ind = names(qq_train_data),
+                                                  what = log)
+
+DataExplorer::plot_qq(log_qq_train_data, nrow = 4L, ncol = 3L)
+```
+**Figure 6. Feature QQ plots, log transformation**
+
+## Correlation
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#correlation matrix for predictors
+ggcorr(rawTrain%>% select(zn:medv))
+```
+**Figure 7. Correlation matrix**
+
+It is important to check for features which may also be correlated. Simply, having multiple features relate to themselves can cause overfitting, reduced $p$ values, and strange variances in the data. To avoid this, we exclude one or more of the variables. In the correlation matrix (Figure 7) **(Code Appendix 2.9)**, we see that `tax` is very intertwined with two other variables besides the target, showing up as bright red. We'll take care when constructing our models not to use those. 
+
+    Var1  | Var2   | Correlation
+    ------| -------|-------------
+    rad   | tax    |       0.91
+    indus | nox    |       0.76
+    nox   | age    |       0.74
+    indus | tax    |       0.73
+    nox   | target |       0.73*
+    rm    | medv   |       0.71
+    age   | target |       0.63*
+    rad   | target |       0.03*
+    tax   | target |       0.61*
+
+**Table 3. Correlation results**
+
+# Data Preparation
+
+## Outlier Value Analysis
+
+Coming back to the outliers, let's analyze the variables with outliers and their relation to the `target` variable. **(Code Appendix 3.2.1)**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+pred_vs_target <- gather(rawTrain, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+```
+**Figure 8. Feature box plots with outliers**
+
+## Outlier imputation
+
+The boxplots above confirm that there are obvious outliers for variables `dis`, `indus`, `lstat`, `medv`, `ptratio`, `rm`, `tax`, and `zn`. These outliers  need to be imputed to prevent them from skewing the results of the  modeling **(Code Appendix 3.2.2)**. We use the median values to impute outliers. After imputing the variables with outliers, let's analyze them again with respect to their relation to the `target` variable **(Code Appendix 3.2.3)**. This is to ensure that outliers have been eliminated or at least minimized as much as possible.
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+rawTrain_preped <- rawTrain %>%
+  mutate(
+    dis     = ifelse(dis > 7.5, median(dis), dis),
+    indus   = ifelse(indus > 21, median(indus), indus),
+    lstat   = ifelse(lstat > 25, median(lstat), lstat),
+    medv    = ifelse(medv > 30 | medv < 10, median(medv), medv),
+    ptratio = ifelse(ptratio < 15.0, median(ptratio), ptratio),
+    rm      = ifelse(rm > 7.2 | rm < 5.4, median(rm), rm),
+    tax     = ifelse(tax > 700.0, median(tax), tax),
+    zn      = ifelse(zn > 80, median(zn), zn)
+  )
+```
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+pred_vs_target <- gather(rawTrain_preped, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+```
+**Figure 9. Feature box plots with imputer outliers**
+
+# Model Building
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+dt <- createDataPartition(rawTrain_preped$target, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+train <- rawTrain[dt,]
+test <- rawTrain[-dt,]
+```
+
+## Model 1: Kitchen Sink
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = FALSE}
+#remove Tax due to high correlation with other variables
+modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = train, family = "binomial")
+summary(modelOne)
+```
+
+AIC Value = 171.94
+
+This model contains all values except for `tax` which was removed from consideration in any model due to its multicollinearity with other features. No transformations were performed on this model. The rule of thumb for these types are regressions are the AIC value. Lower AIC values indicate a strong model. **(Code Appendix 4.2)**
+
+## Model 2: Kitchen Sink Transformed in Part
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = FALSE}
+#remove Tax squared age and log lstat
+modelTwo <- glm(target ~ zn + indus + chas + nox + rm + age^2 + dis + rad + ptratio + log2(lstat) + medv , data = train, family = "binomial")
+summary(modelTwo)
+
+#This one has a litter lower AIC
+```
+
+AIC Value = 173.86
+
+For this model, we include all features, squaring `age` and log transforming `lstat` in hopes of producing a lower AIC score. **(Code Appendix 4.3)**
+
+## Model 3: Kitchen Sink Transformed More
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = FALSE}
+#log10(zn + 1), log10(dis) and deleted log2(lstat) - not significant
+modelThree <- glm(target ~ log10(zn + 1) + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio  + medv, data = train, family = "binomial")
+summary(modelThree)
+
+#AIC is lower again (not sure if age^2 ishelpful)
+```
+
+AIC Value = 168.1
+
+Now we see the AIC score starting to decrease, we log `zn`, `dis`, and keep `age` squared, though we are unsure if this last transformation has any impact. **(Code Appendix 4.4)**
+
+## Model 4: More Transformations
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = FALSE}
+#combine rad and rm (multiplied) - they seemed to correspond in their distributions
+modelFour<- glm(target ~ log10(zn + 1) + indus + chas + nox +  age^2 + log10(dis) + rad*rm + ptratio  + medv, data = train, family = "binomial")
+summary(modelFour)
+
+#AIC is lower #Not sure what the rationale is for this working but it lowered the AIC numnber and Residual Deviance
+```
+
+AIC Value = 161.9
+
+This model lowers the AIC score and reduces the residual deviance, logging and scaling `zn`, squaring `age`, and multiplying `rad` by `rm`. **(Code Appendix 4.5)**
+
+## Model 5: Variable Importance
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = FALSE}
+#delete indus
+modelFive<-glm(target ~ log10(zn+1)+ nox +  age^2 + log10(dis) + rad*rm + ptratio  + medv, data = train, family = "binomial")
+summary(modelFive)
+#AIC is higher #resiudal deviance is lower 
+# I looked at the histograms and looked for complementary shapes to decide what to multiply
+```
+
+AIC Value = 161.9
+
+Keeping model 4's setup, except for deleting `indus` leads to higher residual deviance and the same AIC sore. This could be a final contender for our model. We learn that `indus` and `zn` are not very important to this model. **(Code Appendix 4.6)**
+
+## Model 6: Narrow Variable Importance
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results = FALSE}
+#multiply ptratio*nox (remove squared from age)
+modelSix<- glm(target ~ log10(zn + 1) + age  + ptratio*nox + log10(dis) + rad*rm + medv, data = train, family = "binomial")
+summary(modelSix)
+
+#AIC is lower
+```
+
+AIC Value = 161.1
+
+Taking what we've learned from model 5, we delete `indus` and multiply `ptratio` by `nox` and push the AIC even lower. **(Code Appendix 4.7)**
+
+# Model Selection
+
+Before proceeding to final model selection, we will test for accuracy and error. As a final check we will look at the ROC plots. **(Code Appendix 5.1)**
+
+## Model Error
+
+For each model we use the `predict()` function and check the error and $r^2$ values **(Code Appendix 5.2.1)**. The RMSE is decreasing with each model, possibly meaning that the fit is better with each **(Code Appendix 5.2.2)**. It is difficult to tell as the training sample is rather small. Model 6's $r^2$ value may mean that by deleting `indus` from the model it lost some information that would lower the $r^2$. 
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#Make predictions
+predOne = predict(modelOne,test, type = "response")
+predTwo = predict(modelTwo,test, type = "response")
+predThree = predict(modelThree,test, type = "response")
+predFour = predict(modelFour,test, type = "response")
+predFive = predict(modelFive,test, type = "response")
+predSix = predict(modelSix,test, type = "response")
+```
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#Error Measures
+data.frame(modelOne = postResample(pred = predOne, obs = test$target), modelTwo = postResample(pred = predTwo, obs = test$target), modelThree = postResample(pred = predThree, obs = test$target), modelFour = postResample(pred = predFour, obs = test$target), modelFive = postResample(pred = predFive, obs = test$target), modelSix = postResample(pred = predSix, obs = test$target))
+
+#We can see RMSE is increasing which means the fit is better for every model - This doesnt reflect very well in our accuracy measuremnets because the training sample is too small. Model Six has a lower Rsquared which may indicate deleting indus lost information. 
+```
+
+## Confusion Matrix and Accuracy Measurment
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#Extract Accuracy
+
+#Model One
+#format predictions to binary
+resultsFitOne <- ifelse(predOne > 0.5,1,0)
+resultsFitOne <- as.factor(resultsFitOne)
+
+#Confusion Matrix to Extract Accuracy
+cOne <- confusionMatrix(as.factor(test$target),resultsFitOne)
+accOne <- as.data.frame(cOne$overall)[1]
+accOne<- accOne %>%
+  slice(1)
+
+
+#Model Two
+#format predictions to binary
+resultsFitTwo <- ifelse(predTwo > 0.5,1,0)
+resultsFitTwo <- as.factor(resultsFitTwo)
+
+#Confusion Matrix to Extract Accuracy
+cTwo <- confusionMatrix(resultsFitTwo, as.factor(test$target))
+accTwo <- as.data.frame(cTwo$overall)[1]
+accTwo<- accTwo %>%
+  slice(1)
+
+#Model Three
+#format predictions to binary
+resultsFitThree<- ifelse(predThree > 0.5,1,0)
+resultsFitThree <- as.factor(resultsFitThree)
+
+#Confusion Matrix to Extract Accuracy
+cThree <- confusionMatrix(resultsFitThree, as.factor(test$target))
+accThree <- as.data.frame(cThree$overall)[1]
+accThree<- accThree%>%
+  slice(1)
+
+#Model Four
+#format predictions to binary
+resultsFitFour<- ifelse(predFour > 0.5,1,0)
+resultsFitFour <- as.factor(resultsFitFour)
+
+#Confusion Matrix to Extract Accuracy
+cFour <- confusionMatrix(resultsFitFour, as.factor(test$target))
+accFour <- as.data.frame(cFour$overall)[1]
+accFour<- accFour%>%
+  slice(1)
+
+#Model Five
+#format predictions to binary
+resultsFitFive<- ifelse(predFive > 0.5,1,0)
+resultsFitFive <- as.factor(resultsFitFive)
+
+#Confusion Matrix to Extract Accuracy
+cFive <- confusionMatrix(resultsFitFive, as.factor(test$target))
+accFive <- as.data.frame(cFive$overall)[1]
+accFive<- accFive%>%
+  slice(1)
+
+
+#Model Six
+#format predictions to binary
+resultsFitSix<- ifelse(predSix > 0.5,1,0)
+resultsFitSix <- as.factor(resultsFitSix)
+
+#Confusion Matrix to Extract Accuracy
+cSix<- confusionMatrix(resultsFitSix, as.factor(test$target))
+accSix <- as.data.frame(cSix$overall)[1]
+accSix<- accSix%>%
+  slice(1)
+```
+
+In terms of accuracy, it appears that models 5 and 6 are stand outs with the highest accuracy scores. **(Code Appendix 5.3 & 5.4)**
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+#create a table with accuracies
+data.frame(c(accOne, accTwo, accThree, accFour,accFive, accSix))
+
+#Here we see that our best models are Five and Six in terms of accuracy
+```
+
+## Final Model Plots
+
+In reviewing the final plots for these models, we check again the residuals and QQ plots for each. Both models look extremely close for each of the graphs, with very slight differences. **(Code Appendix 5.5.1 & 5.5.2)**
+
+### Model 5
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+par(mfrow = c(2,2))
+plot(modelFive)
+```
+
+### Model 6
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+par(mfrow = c(2,2))
+plot(modelSix)
+```
+
+## ROC 
+
+The ROC plot in figure 10 **(Code Appendix 5.6)** seems to provide the tie breaker for us. Model 6 is $0.1%$ higher and will be our final model to use for our predictions. 
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+par(pty = "s")
+roc(train$target, modelFive$fitted.values, plot = TRUE, legacy.axes = TRUE, percent=TRUE, col="blue", lwd=4, print.auc = TRUE)
+plot.roc(train$target, modelSix$fitted.values, percent=TRUE, col="dark green", lwd=4, print.auc=TRUE, add=TRUE, print.auc.y=40)
+legend("bottomright", legend=c("Model 5", "Model 6"), col=c("blue", "dark green"), lwd=4)
+```
+**Figure 10. ROC plot with models 5 and 6**
+
+## Conclusion
+
+We conclude by writing our predictions to the `test` data in a CSV using model 6. **(Code Appendix 5.7)**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+rawTest$target_pred <- predict(modelSix, newdata = rawTest)
+rawTest %>%
+  write.csv(., "crime.csv", row.names = F)
+```
+
+
+# Code Appendix
+
+## 1.1 Libraries Used
+
+We use pretty standard packages for this assignment, including the ever-useful `tidyverse`, `ggplot2`, and `caret`. New additions for this assignment include `VIM`, `DataExplorer`, and `broom`.
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(kableExtra)
+library(tidymodels)
+library(DataExplorer)
+library(psych)
+library(pROC)
+
+
+# 2.1 Data Exploration
+
+## 2.2 Data Import
+
+{r, warning = FALSE, message = FALSE, echo=FALSE
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv", header = TRUE, stringsAsFactors = FALSE)
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv")
+
+## 2.3 Summary Stats
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+glimpse(rawTrain)
+
+## 2.4 Table 1. Glimpse of data structure**
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+kable(describe(rawTrain),booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down")
+
+## 2.5 Missing Data Checks
+
+### 2.5.1 Figure 1. Plot missing values with VIM package
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+#plot missing values using VIM package
+aggr(rawTrain , col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(rawTrain), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+
+## 2.5.2 Figure 2. Plot missing values with DataExplorer package
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+DataExplorer::plot_intro(rawTrain)
+
+## 2.6 Feature Histograms Figure 3. Feature histograms
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+DataExplorer::plot_histogram(rawTrain)
+
+## 2.7 Feature Boxplots Figure 4. Feature box plots
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+ggplot(stack(rawTrain), aes(x = ind, y = values)) +
+  geom_boxplot(color = "darkblue",
+               fill = "lightblue",
+               alpha = 0.2,
+               outlier.color = "red",
+               outlier.fill = "red",
+               outlier.alpha = 0.2,
+               notch = TRUE) + 
+  labs(title = "Boxplot of all feature variables") + 
+  scale_y_log10()
+
+## 2.8 Feature QQ Plots
+
+### 2.8.1 QQ Plots Figure 5. Feature QQ plot
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+qq_train_data <- rawTrain[, c("age", "dis", "indus", "lstat",
+                                 "medv", "nox", "ptratio", "rad",
+                                 "rm", "tax", "zn")]
+
+DataExplorer::plot_qq(qq_train_data, nrow = 4L, ncol = 3L)
+
+### 2.8.2 Log QQ Plots Figure 6. Feature QQ plots, log transformation
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+log_qq_train_data <- DataExplorer::update_columns(qq_train_data,
+                                                  ind = names(qq_train_data),
+                                                  what = log)
+
+DataExplorer::plot_qq(log_qq_train_data, nrow = 4L, ncol = 3L)
+
+## 2.9 Correlation Figure 7. Correlation matrix
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+#correlation matrix for predictors
+ggcorr(rawTrain%>% select(zn:medv))
+
+# 3.1 Data Preparation
+
+## 3.2 Outlier Value Analysis
+
+### 3.2.1 Figure 8. Feature box plots with outliers
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+pred_vs_target <- gather(rawTrain, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+
+### 3.2.2 Outlier imputation
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+rawTrain_preped <- rawTrain %>%
+  mutate(
+    dis     = ifelse(dis > 7.5, median(dis), dis),
+    indus   = ifelse(indus > 21, median(indus), indus),
+    lstat   = ifelse(lstat > 25, median(lstat), lstat),
+    medv    = ifelse(medv > 30 | medv < 10, median(medv), medv),
+    ptratio = ifelse(ptratio < 15.0, median(ptratio), ptratio),
+    rm      = ifelse(rm > 7.2 | rm < 5.4, median(rm), rm),
+    tax     = ifelse(tax > 700.0, median(tax), tax),
+    zn      = ifelse(zn > 80, median(zn), zn)
+  )
+
+
+### 3.2.3 Figure 9. Feature box plots with imputed outliers
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+pred_vs_target <- gather(rawTrain_preped, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+
+# 4.1 Model Building
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+dt <- createDataPartition(rawTrain_preped$target, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+train <- rawTrain[dt,]
+test <- rawTrain[-dt,]
+
+## 4.2 Model 1: Kitchen Sink
+
+```{r, warning = FALSE, message = FALSE}
+#remove Tax due to high correlation with other variables
+modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = train, family = "binomial")
+summary(modelOne)
+```
+
+## 4.3 Model 2: Kitchen Sink Transformed in Part
+
+```{r, warning = FALSE, message = FALSE}
+#remove Tax squared age and log lstat
+modelTwo <- glm(target ~ zn + indus + chas + nox + rm + age^2 + dis + rad + ptratio + log2(lstat) + medv , data = train, family = "binomial")
+summary(modelTwo)
+
+#This one has a litter lower AIC
+```
+
+## 4.4 Model 3: Kitchen Sink Transformed More
+
+```{r, warning = FALSE, message = FALSE}
+#log10(zn + 1), log10(dis) and deleted log2(lstat) - not significant
+modelThree <- glm(target ~ log10(zn + 1) + indus + chas + nox + rm + age^2 + log10(dis) + rad + ptratio  + medv, data = train, family = "binomial")
+summary(modelThree)
+
+#AIC is lower again (not sure if age^2 ishelpful)
+```
+
+## 4.5 Model 4: More Transformations
+
+```{r, warning = FALSE, message = FALSE}
+#combine rad and rm (multiplied) - they seemed to correspond in their distributions
+modelFour<- glm(target ~ log10(zn + 1) + indus + chas + nox +  age^2 + log10(dis) + rad*rm + ptratio  + medv, data = train, family = "binomial")
+summary(modelFour)
+
+#AIC is lower #Not sure what the rationale is for this working but it lowered the AIC numnber and Residual Deviance
+```
+
+## 4.6 Model 5: Variable Importance
+
+```{r, warning = FALSE, message = FALSE}
+#delete indus
+modelFive<-glm(target ~ log10(zn+1)+ nox +  age^2 + log10(dis) + rad*rm + ptratio  + medv, data = train, family = "binomial")
+summary(modelFive)
+#AIC is higher #resiudal deviance is lower 
+# I looked at the histograms and looked for complementary shapes to decide what to multiply
+```
+
+## 4.7 Model 6: Narrow Variable Importance
+
+```{r, warning = FALSE, message = FALSE}
+#multiply ptratio*nox (remove squared from age)
+modelSix<- glm(target ~ log10(zn + 1) + age  + ptratio*nox + log10(dis) + rad*rm + medv, data = train, family = "binomial")
+summary(modelSix)
+
+#AIC is lower
+```
+
+# 5.1 Model Selection
+
+Before proceeding to final model selection, we will test for accuracy and error. As a final check we will look at the ROC plots.
+
+## 5.2 Model Error
+
+### 5.2.1
+{r, warning = FALSE, message = FALSE}
+#Make predictions
+predOne = predict(modelOne,test, type = "response")
+predTwo = predict(modelTwo,test, type = "response")
+predThree = predict(modelThree,test, type = "response")
+predFour = predict(modelFour,test, type = "response")
+predFive = predict(modelFive,test, type = "response")
+predSix = predict(modelSix,test, type = "response")
+
+##5.2.2
+
+{r, warning = FALSE, message = FALSE}
+#Error Measures
+data.frame(modelOne = postResample(pred = predOne, obs = test$target), modelTwo = postResample(pred = predTwo, obs = test$target), modelThree = postResample(pred = predThree, obs = test$target), modelFour = postResample(pred = predFour, obs = test$target), modelFive = postResample(pred = predFive, obs = test$target), modelSix = postResample(pred = predSix, obs = test$target))
+
+
+## 5.3 Confusion Matrix and Accuracy Measurment
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+Extract Accuracy
+
+### 5.3.1 Model 1
+
+resultsFitOne <- ifelse(predOne > 0.5,1,0)
+resultsFitOne <- as.factor(resultsFitOne)
+
+cOne <- confusionMatrix(as.factor(test$target),resultsFitOne)
+accOne <- as.data.frame(cOne$overall)[1]
+accOne<- accOne %>%
+  slice(1)
+
+### 5.3.2 Model 2
+
+resultsFitTwo <- ifelse(predTwo > 0.5,1,0)
+resultsFitTwo <- as.factor(resultsFitTwo)
+
+cTwo <- confusionMatrix(resultsFitTwo, as.factor(test$target))
+accTwo <- as.data.frame(cTwo$overall)[1]
+accTwo<- accTwo %>%
+  slice(1)
+
+### 5.3.3 Model 3
+
+resultsFitThree<- ifelse(predThree > 0.5,1,0)
+resultsFitThree <- as.factor(resultsFitThree)
+
+cThree <- confusionMatrix(resultsFitThree, as.factor(test$target))
+accThree <- as.data.frame(cThree$overall)[1]
+accThree<- accThree%>%
+  slice(1)
+
+### 5.3.4 Model 4
+
+resultsFitFour<- ifelse(predFour > 0.5,1,0)
+resultsFitFour <- as.factor(resultsFitFour)
+
+cFour <- confusionMatrix(resultsFitFour, as.factor(test$target))
+accFour <- as.data.frame(cFour$overall)[1]
+accFour<- accFour%>%
+  slice(1)
+
+### 5.3.5 Model 5
+
+resultsFitFive<- ifelse(predFive > 0.5,1,0)
+resultsFitFive <- as.factor(resultsFitFive)
+
+cFive <- confusionMatrix(resultsFitFive, as.factor(test$target))
+accFive <- as.data.frame(cFive$overall)[1]
+accFive<- accFive%>%
+  slice(1)
+
+### 5.3.6 Model 6
+
+resultsFitSix<- ifelse(predSix > 0.5,1,0)
+resultsFitSix <- as.factor(resultsFitSix)
+
+cSix<- confusionMatrix(resultsFitSix, as.factor(test$target))
+accSix <- as.data.frame(cSix$overall)[1]
+accSix<- accSix%>%
+  slice(1)
+
+## 5.4 Accuracy Results
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+#create a table with accuracies
+data.frame(c(accOne, accTwo, accThree, accFour,accFive, accSix))
+
+
+## 5.5 Final Model Plots
+
+### 5.5.1 Model 5
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+par(mfrow = c(2,2))
+plot(modelFive)
+
+
+### 5.5.2 Model 6
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+par(mfrow = c(2,2))
+plot(modelSix)
+
+
+## 5.6 ROC Figure 10. ROC plot with models 5 and 6
+
+{r, warning = FALSE, message = FALSE, echo=FALSE}
+par(pty = "s")
+roc(train$target, modelFive$fitted.values, plot = TRUE, legacy.axes = TRUE, percent=TRUE, col="blue", lwd=4, print.auc = TRUE)
+plot.roc(train$target, modelSix$fitted.values, percent=TRUE, col="dark green", lwd=4, print.auc=TRUE, add=TRUE, print.auc.y=40)
+legend("bottomright", legend=c("Model 5", "Model 6"), col=c("blue", "dark green"), lwd=4)
+
+## 5.7 Conclusion
+
+{r echo=FALSE, message=FALSE, warning=FALSE}
+rawTest$target_pred <- predict(modelSix, newdata = rawTest)
+rawTest %>%
+  write.csv(., "crime.csv", row.names = F)
+```
+
