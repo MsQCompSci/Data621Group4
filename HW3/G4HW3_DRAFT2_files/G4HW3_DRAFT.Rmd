@@ -1,0 +1,237 @@
+---
+title: "DATA 621 - Homework 3"
+author: "Ian Costello"
+date: "11/6/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+
+## General Objective
+
+For this assignment, we will be exploring, analyzing, and modeling data related to crime statistics for various areas of a major U.S. city. The primary objective is to understand how, or if, variable indicate whether crime in a particular area will be above or below the median crime rate for the entire city. The models will be binary logistic regression using combinations or constructions of the variables provided.  
+
+## About the Data
+
+- zn: proportion of residential land zoned for large lots (over 25000 square feet) (predictor variable)
+- indus: proportion of non-retail business acres per suburb (predictor variable)
+- chas: a dummy var. for whether the suburb borders the Charles River (1) or not (0) (predictor variable)
+- nox: nitrogen oxides concentration (parts per 10 million) (predictor variable)
+- rm: average number of rooms per dwelling (predictor variable)
+- age: proportion of owner-occupied units built prior to 1940 (predictor variable)
+- dis: weighted mean of distances to five Boston employment centers (predictor variable)
+- rad: index of accessibility to radial highways (predictor variable)
+- tax: full-value property-tax rate per $10,000 (predictor variable)
+- ptratio: pupil-teacher ratio by town (predictor variable)
+- lstat: lower status of the population (percent) (predictor variable)
+- medv: median value of owner-occupied homes in $1000s (predictor variable)
+- target: whether the crime rate is above the median crime rate (1) or not (0) (response variable)
+
+## Libraries Used
+
+We use pretty standard packages for this assignment, including the ever-useful `tidyverse`, `ggplot2`, and `caret`. New additions for this assignment include `VIM`, `DataExplorer`, and `broom`.
+
+```{r, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(kableExtra)
+library(tidymodels)
+library(DataExplorer)
+library(psych)
+```
+
+# Data Exploration
+
+As usual, our data are stored on GitHub at our team's main repository for easy access across team members. 
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-training-data_modified.csv", header = TRUE, stringsAsFactors = FALSE)
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW3/crime-evaluation-data_modified.csv")
+```
+
+## Data Structure and Summary Statistics
+
+
+
+```{r}
+str(rawTrain)
+
+summary(rawTrain, digits = 2)
+```
+
+```{r}
+kable(describe(rawTrain),booktabs = TRUE) %>%
+  kable_styling(latex_options = "scale_down")
+```
+
+## Missing Data Checks
+
+```{r}
+#plot missing values using VIM package
+aggr(rawTrain , col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(rawTrain), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+```{r}
+DataExplorer::plot_intro(rawTrain)
+```
+
+- We can see that most of the variables appear to be continuous. But, from the description of the predictors in the overview section of this document, we know that some of them can be treated as discrete and/or categorical. We will know more later when we test for value uniqueness.
+- No columns with missing values were detected.
+- All rows are complete.
+
+## Feature Histograms
+
+```{r}
+DataExplorer::plot_histogram(rawTrain)
+```
+- None of the predictor variables seem to be nearly normal with exception of perhaps `rm`. 
+- Multiple predictors appear to be skewed such as `age`, `dis`, `lstat`, `ptratio`. It will be necessary to apply transformations to these.
+- Possible outliers can be seen for predictors `dis`, `indus`, `lstat`, `nox`, `ptratio`, `rad`, `rm`, `tax`, and `zn`. Later, we will verify this using box plots.
+- Multiple modes can be observed for variables `indus`, `rad`, and `tax`. 
+
+## Feature Boxplots
+
+- Let's generate box plots for all the feature variables. 
+- Let's also apply a log re-scaling to better compare the values across variables using a common scale.
+- Let's use notches to compare groups. If the notches of two boxes do not overlap, then this suggests that the medians are significantly different.
+
+
+```{r}
+ggplot(stack(rawTrain), aes(x = ind, y = values)) +
+  geom_boxplot(color = "darkblue",
+               fill = "lightblue",
+               alpha = 0.2,
+               outlier.color = "red",
+               outlier.fill = "red",
+               outlier.alpha = 0.2,
+               notch = TRUE) + 
+  labs(title = "Boxplot of all feature variables") + 
+  scale_y_log10()
+```
+
+The boxplots confirm that there are obvious outliers for variables `age`, `indus`, `lstat`, `medv`, `ptratio`, and `rm`. These outliers will need to be imputed to prevent them from skewing the results of the  modeling.
+
+## Feature QQ Plots
+
+- Let's use Quantile-Quantile plots to visualize the deviation of the predictors compared to the normal distribution.
+
+### QQ Plots
+
+```{r}
+qq_train_data <- rawTrain[, c("age", "dis", "indus", "lstat",
+                                 "medv", "nox", "ptratio", "rad",
+                                 "rm", "tax", "zn")]
+
+DataExplorer::plot_qq(qq_train_data, nrow = 4L, ncol = 3L)
+```
+
+- It appears that, with exception of the "chas" predictor, all other predictors will need to be transformed for linear regression.
+
+- Let's apply a simple log transformation and plot them again to see any difference can be observed.
+
+### Log QQ Plots
+
+```{r}
+log_qq_train_data <- DataExplorer::update_columns(qq_train_data,
+                                                  ind = names(qq_train_data),
+                                                  what = log)
+
+DataExplorer::plot_qq(log_qq_train_data, nrow = 4L, ncol = 3L)
+```
+
+- The distributions look better now. So, as part of the data preparation we will transform the necessary predictors before we use them for the models.
+
+# Data Preparation
+
+## Convert Categorical variables to factors
+
+From the unique counts above, we can see that the variables `chas` and `target` can be considered as categorical variables due to their low number of unique values. so, we are converting them to factor data type.
+
+## Correlation Analysis
+
+Let's use a heatmap to visualize correlation for all features:
+
+```{r}
+  DataExplorer::plot_correlation(rawTrain)
+```
+
+- We see significant correlation between the variables below:
+
+    Var1  | Var2   | Correlation
+    ------| -------|-------------
+    rad   | tax    |       0.91
+    indus | nox    |       0.76
+    nox   | age    |       0.74
+    indus | tax    |       0.73
+    nox   | target |       0.73*
+    rm    | medv   |       0.71
+    age   | target |       0.63*
+    rad   | target |       0.03*
+    tax   | target |       0.61*
+
+## Outlier Value Analysis
+
+Let's analyze the variables with outliers and their relation to the `target` variable.
+
+```{r}
+pred_vs_target <- gather(rawTrain, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+```
+
+## Outlier imputation
+
+The boxplots above confirm that there are obvious outliers for variables `dis`, `indus`, `lstat`, `medv`, `ptratio`, `rm`, `tax`, and `zn`. These outliers  need to be imputed to prevent them from skewing the results of the  modeling.
+
+Let's impute outliers with median values.
+
+```{r}
+rawTrain_preped <- rawTrain %>%
+  mutate(
+    dis     = ifelse(dis > 7.5, median(dis), dis),
+    indus   = ifelse(indus > 21, median(indus), indus),
+    lstat   = ifelse(lstat > 25, median(lstat), lstat),
+    medv    = ifelse(medv > 30 | medv < 10, median(medv), medv),
+    ptratio = ifelse(ptratio < 15.0, median(ptratio), ptratio),
+    rm      = ifelse(rm > 7.2 | rm < 5.4, median(rm), rm),
+    tax     = ifelse(tax > 700.0, median(tax), tax),
+    zn      = ifelse(zn > 80, median(zn), zn)
+  )
+```
+
+After imputing the variables with outliers, let's analyze them again with respect to their relation to the `target` variable. This is to ensure that outliers have been eliminated or at least minimized as much as possible.
+
+```{r}
+pred_vs_target <- gather(rawTrain_preped, variable, value, -c(chas,target))
+
+ggplot(pred_vs_target, aes(x = target, y = value)) + 
+    geom_boxplot() + 
+    facet_wrap(~variable, scales = 'free') 
+```
+
+# Build Models
+
+
+```{r}
+#remove Tax due to high correlation with other variables
+modelOne <- glm(target ~ zn + indus + chas + nox + rm + age + dis + rad + ptratio + lstat + medv , data = rawTrain_preped, family = "binomial")
+
+modelOne
+```
+
+
+
