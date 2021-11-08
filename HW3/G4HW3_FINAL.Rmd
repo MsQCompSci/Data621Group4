@@ -451,12 +451,14 @@ legend("bottomright", legend=c("Model 5", "Model 6"), col=c("blue", "dark green"
 
 ## Conclusion
 
-We conclude by writing our predictions to the `test` data in a CSV using model 6. **(Code Appendix 5.7)**
+We conclude by writing our predictions to the `test` data in a CSV using model 6. To do this, we took the average from the predicted values and assigned either 1 or 0 if the value fell above or below the average. **(Code Appendix 5.7)**
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-rawTest$target_pred <- predict(modelSix, newdata = rawTest)
+rawTest$target_prob <- predict(modelSix, newdata = rawTest)
+mean_test <- mean(rawTest$target_prob)
+rawTest$target_pred <- ifelse(rawTest$target_prob >= mean_test, 1, 0)
 rawTest %>%
-  write.csv(., "crime.csv", row.names = F)
+  write.csv(., "crime_pred.csv", row.names = F)
 ```
 
 
@@ -781,8 +783,8 @@ legend("bottomright", legend=c("Model 5", "Model 6"), col=c("blue", "dark green"
 ## 5.7 Conclusion
 
 {r echo=FALSE, message=FALSE, warning=FALSE}
-rawTest$target_pred <- predict(modelSix, newdata = rawTest)
+rawTest$target_prob <- predict(modelSix, newdata = rawTest)
+mean_test <- mean(rawTest$target_prob)
+rawTest$target_pred <- ifelse(rawTest$target_prob >= mean_test, 1, 0)
 rawTest %>%
-  write.csv(., "crime.csv", row.names = F)
-```
-
+  write.csv(., "crime_pred.csv", row.names = F)
