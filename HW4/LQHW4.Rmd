@@ -1,0 +1,150 @@
+---
+title: "Data 608 HW 4 LQ"
+author: "Layla Quinones"
+date: "11/10/2021"
+output: html_document
+---
+
+# Libraries
+
+```{r, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(naniar)
+library(stringr)
+```
+
+# EDA
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW4/insurance_training_data.csv", header = TRUE, stringsAsFactors = FALSE)
+```
+
+
+```{r}
+# check to see if we need to clean the data 
+glimpse(rawTrain)
+```
+
+There are 8161 observations in this data set and 26 columns. We know that `INDEX`, `TARGET_FLAG` and `TARGET_AMT` are not predictor variables. This gives us 8161 observations with 23 predictors that are a combination of int, double and character data types. We also see that the character variables will have to converted to factors in order for us to explore their distributions. Variables such and `INCOME`, `HOME_VAL`, `BLUEBOOK`, `OLDCLAIM` will be converted to numeric because they are numbers with values that have meaning in their heirarchy. 
+
+
+## Missing Values 
+
+```{r}
+#plot missing values using VIM package
+gg_miss_var(rawTrain)
+```
+
+
+There are missing variables in the columns `Car_AGE`, `AGE` and `YOJ`. None of these exceed the 10% missing data so we will continue with all variables for noe (not dropping any of them due to missing data)
+
+## DATA CLEANING - CONVERTING DATA TYPES
+
+```{r}
+#lets remove the $ and , and put in a different variable name from numeric strings
+rawTrain <- rawTrain %>% 
+  mutate(INCOME = gsub("\\$", "", INCOME),     #Remove $
+         HOME_VAL = gsub("\\$", "", HOME_VAL), 
+         BLUEBOOK = gsub("\\$", "", BLUEBOOK), 
+         OLDCLAIM = gsub("\\$", "", OLDCLAIM)) %>%
+  mutate(INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
+         HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
+         BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
+         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM))) 
+
+#lets also change all other character variables into factors
+rawTrain[sapply(rawTrain, is.character)] <- lapply(rawTrain[sapply(rawTrain, is.character)], 
+                                       as.factor)
+
+#display summary statistics again to confirm
+summary(rawTrain)
+```
+
+We get a better sense of the information available in each variable now with the data type change. 
+
+```{r}
+#histagrams for only the numerical data
+histData <- rawTrain %>%
+  select(AGE, HOMEKIDS, YOJ,TRAVTIME, TIF, CLM_FREQ, MVR_PTS, CAR_AGE, INCOME, HOME_VAL, BLUEBOOK, OLDCLAIM)
+
+par(mfrow = c(3,3))
+for(i in 1:ncol(histData)) {#distribution of each variable
+  hist(histData[[i]], main = colnames(histData[i]), col = "red")
+}
+```
+
+From the above histagrams of numerical data we can see that mose numerical variables have a right skew which may indicate that a transformation will be helpful for these variables. 
+
+```{r}
+longData <- histData %>%
+  select(-HOME_VAL, -INCOME, -BLUEBOOK, -OLDCLAIM) %>%  # remove this for scale issue will plot below
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Insurance Data Variables", y="Value")
+```
+
+```{r}
+longData2 <- histData %>%
+  select(HOME_VAL, INCOME, BLUEBOOK, OLDCLAIM) %>%  # remove this for scale issue will plot below
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData2, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Insurance Data Variables PART 2", y="Value")
+```
+
+From these initial box plots we can see that there are outliers specifically `TRAVTIME`, `INCOME`, `HOME_VAL` has many outliers more spread out compared to the other variables.
+
+----------I AM UP TO HERE -----------
+## Categorical Predictors
+
+```{r}
+barData %>%
+  select(PARENT1, MSTATUS:JOB, CAR_USE, CAR_TYPE, RED_CAR,REVOKED, URBANICITY)
+
+```
+
+## Relationship of Target? 
+
+
+
+
+## Correlation
+
+```{r}
+#correlation matrix for predictors
+ggcorr(rawTrain%>% select(zn:medv))
+```
+
+```{r}
+#Lets look at some highly correlated variables and drop them
+findCorrelation(cor(rawTrain%>% select(zn:medv)),
+                cutoff = 0.75,
+                verbose = TRUE,
+                names = TRUE)
+
+# There are 4 highly correlated variables
+# I will drop the highest one which is tax which seems to be the most highly correlated
+#tax and rad are 0.9 correlated lets look at their relationship to the predictor to see which one to drop
+```
+
+
