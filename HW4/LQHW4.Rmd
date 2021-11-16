@@ -53,7 +53,13 @@ rawTrain <- rawTrain %>%
   mutate(INCOME = gsub("\\$", "", INCOME),     #Remove $
          HOME_VAL = gsub("\\$", "", HOME_VAL), 
          BLUEBOOK = gsub("\\$", "", BLUEBOOK), 
-         OLDCLAIM = gsub("\\$", "", OLDCLAIM)) %>%
+         OLDCLAIM = gsub("\\$", "", OLDCLAIM),
+         MSTATUS = gsub("z_", "", MSTATUS),
+         SEX = gsub("z_", "", SEX), 
+         EDUCATION= gsub("z_", "", EDUCATION),
+         JOB= gsub("z_", "", JOB),
+         CAR_TYPE= gsub("z_", "", CAR_TYPE),
+         URBANICITY= gsub("z_", "", URBANICITY)) %>%
   mutate(INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
          HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
          BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
@@ -114,37 +120,122 @@ ggplot(longData2, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.c
 
 From these initial box plots we can see that there are outliers specifically `TRAVTIME`, `INCOME`, `HOME_VAL` has many outliers more spread out compared to the other variables.
 
-----------I AM UP TO HERE -----------
+
 ## Categorical Predictors
 
 ```{r}
-barData %>%
+#select categorical data only
+barData <- rawTrain %>%
   select(PARENT1, MSTATUS:JOB, CAR_USE, CAR_TYPE, RED_CAR,REVOKED, URBANICITY)
 
+#plot
+ggplot(barData, aes(x = PARENT1, fill = PARENT1)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Parent 1")
+
+#imbalanced here
 ```
 
-## Relationship of Target? 
+```{r}
+ggplot(barData, aes(x = MSTATUS, fill = MSTATUS)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Marital Status")
 
+#less imbalanced here
+```
 
+```{r}
+ggplot(barData, aes(x = SEX, fill = SEX)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - SEX")
 
+#I wouldnt consider this imbalanced but I am not sure what the threshold is for balance/imbalanced data
+```
+
+```{r}
+ggplot(barData, aes(x = EDUCATION, fill = EDUCATION)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Education")
+
+#I wouldnt consider this imbalanced but I am not sure what the threshold is for balance/imbalanced data
+```
+
+```{r}
+ggplot(barData, aes(x = JOB, fill = JOB)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Job")
+
+#I wouldnt consider this imbalanced but I am not sure what the threshold is for balance/imbalanced data
+```
+
+```{r}
+ggplot(barData, aes(x = CAR_USE, fill = CAR_USE)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Car Use")
+
+#Imbalanced
+```
+
+```{r}
+ggplot(barData, aes(x = CAR_TYPE, fill = CAR_TYPE)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Car Type")
+
+#Imbalanced
+```
+
+```{r}
+ggplot(barData, aes(x = RED_CAR, fill = RED_CAR)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Red Car")
+
+#Imbalanced
+```
+
+```{r}
+ggplot(barData, aes(x = REVOKED, fill = REVOKED)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Revoked")
+
+#Imbalanced
+```
+
+## TARGET VARIABLES
+
+```{r}
+ggplot(rawTrain, aes(x = TARGET_AMT, fill = 'red')) + geom_histogram() +
+  labs(title="Insurance Data Categorical Variables - TARGET AMT")
+
+ggplot(rawTrain, aes(x = TARGET_AMT, fill = 'red')) + geom_boxplot() +
+  labs(title="Insurance Data Categorical Variables - TARGET AMT")
+
+# Highly Skewed with lots of outliers
+```
 
 ## Correlation
 
 ```{r}
 #correlation matrix for predictors
-ggcorr(rawTrain%>% select(zn:medv))
+ggcorr(rawTrain)
 ```
 
 ```{r}
 #Lets look at some highly correlated variables and drop them
-findCorrelation(cor(rawTrain%>% select(zn:medv)),
-                cutoff = 0.75,
-                verbose = TRUE,
-                names = TRUE)
+findCorrelation(cor(histData),cutoff = 0.75, verbose = TRUE, names = TRUE)
 
-# There are 4 highly correlated variables
-# I will drop the highest one which is tax which seems to be the most highly correlated
-#tax and rad are 0.9 correlated lets look at their relationship to the predictor to see which one to drop
+# None of the numerical values are highly correlated
 ```
 
+----I AM UP TO HERE--------
+
+## Relationship to Target? 
+
+Use the appropriate column from the data set so you can plot a boxplot with target on the x-axis and variable on the y-axis.
+
+
+
+
+## Data Cleaning 
+
+- oulier and missing value imputing
 
