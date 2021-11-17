@@ -2,7 +2,9 @@
 title: "Data 608 HW 4 LQ"
 author: "Layla Quinones"
 date: "11/10/2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 # Libraries
@@ -203,6 +205,12 @@ ggplot(barData, aes(x = REVOKED, fill = REVOKED)) +
 ## TARGET VARIABLES
 
 ```{r}
+ggplot(rawTrain, aes(x = factor(TARGET_FLAG), fill =factor(TARGET_FLAG))) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Revoked")
+
+# Highly Skewed with lots of outliers
+
 ggplot(rawTrain, aes(x = TARGET_AMT, fill = 'red')) + geom_histogram() +
   labs(title="Insurance Data Categorical Variables - TARGET AMT")
 
