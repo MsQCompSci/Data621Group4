@@ -231,7 +231,7 @@ findCorrelation(cor(histData),cutoff = 0.75, verbose = TRUE, names = TRUE)
 
 ## Data Cleaning 
 
-```{r, message=FALSE, }
+```{r, message=FALSE, results="hide"}
 #due to skew home_val, income  will be imputed with median
 #Age YOJ with the mean
 
@@ -318,6 +318,7 @@ test <- prepTrain[-trainIndex, ]
 modelOne <- glm(formula = TARGET_FLAG ~ . - TARGET_AMT, data=train, family = "binomial" (link="logit"))
 summary(modelOne)
 ```
+
 
 What is needed next is various models to be built after transforming some of these variables based on their shape ( I would also play around with multiplying and dividing variables etc). One thing worth mentioning is that we have to predict two things. So essentially we have to come up with two types of models and test each of them. I was thinking like 3-4 models for each target showing how we are using the shape of the variables to determine transformation, feature engineering and feature selection. 
 
