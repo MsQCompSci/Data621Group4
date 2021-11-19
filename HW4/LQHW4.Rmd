@@ -61,11 +61,12 @@ rawTrain <- rawTrain %>%
          EDUCATION= gsub("z_", "", EDUCATION),
          JOB= gsub("z_", "", JOB),
          CAR_TYPE= gsub("z_", "", CAR_TYPE),
-         URBANICITY= gsub("z_", "", URBANICITY)) %>%
-  mutate(INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
+         URBANICITY= gsub("z_", "", URBANICITY),
+         INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
          HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
          BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
-         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM))) 
+         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM)),
+         TARGET_FLAG = as.factor(TARGET_FLAG)) 
 
 #lets also change all other character variables into factors
 rawTrain[sapply(rawTrain, is.character)] <- lapply(rawTrain[sapply(rawTrain, is.character)], 
@@ -123,15 +124,11 @@ ggplot(longData2, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.c
 From these initial box plots we can see that there are outliers specifically `TRAVTIME`, `INCOME`, `HOME_VAL` has many outliers more spread out compared to the other variables.
 
 
-## Categorical Predictors
+## Categorical Predictors - with target variable
 
 ```{r}
-#select categorical data only
-barData <- rawTrain %>%
-  select(PARENT1, MSTATUS:JOB, CAR_USE, CAR_TYPE, RED_CAR,REVOKED, URBANICITY)
-
 #plot
-ggplot(barData, aes(x = PARENT1, fill = PARENT1)) +
+ggplot(rawTrain, aes(x = PARENT1, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Parent 1")
 
@@ -139,7 +136,7 @@ ggplot(barData, aes(x = PARENT1, fill = PARENT1)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = MSTATUS, fill = MSTATUS)) +
+ggplot(rawTrain, aes(x = MSTATUS, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Marital Status")
 
@@ -147,7 +144,7 @@ ggplot(barData, aes(x = MSTATUS, fill = MSTATUS)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = SEX, fill = SEX)) +
+ggplot(rawTrain, aes(x = SEX, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - SEX")
 
@@ -155,7 +152,7 @@ ggplot(barData, aes(x = SEX, fill = SEX)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = EDUCATION, fill = EDUCATION)) +
+ggplot(rawTrain, aes(x = EDUCATION, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Education")
 
@@ -163,7 +160,7 @@ ggplot(barData, aes(x = EDUCATION, fill = EDUCATION)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = JOB, fill = JOB)) +
+ggplot(rawTrain, aes(x = JOB, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Job")
 
@@ -171,7 +168,7 @@ ggplot(barData, aes(x = JOB, fill = JOB)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = CAR_USE, fill = CAR_USE)) +
+ggplot(rawTrain, aes(x = CAR_USE, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Car Use")
 
@@ -179,7 +176,7 @@ ggplot(barData, aes(x = CAR_USE, fill = CAR_USE)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = CAR_TYPE, fill = CAR_TYPE)) +
+ggplot(rawTrain, aes(x = CAR_TYPE, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Car Type")
 
@@ -187,7 +184,7 @@ ggplot(barData, aes(x = CAR_TYPE, fill = CAR_TYPE)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = RED_CAR, fill = RED_CAR)) +
+ggplot(rawTrain, aes(x = RED_CAR, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Red Car")
 
@@ -195,29 +192,27 @@ ggplot(barData, aes(x = RED_CAR, fill = RED_CAR)) +
 ```
 
 ```{r}
-ggplot(barData, aes(x = REVOKED, fill = REVOKED)) +
+ggplot(rawTrain, aes(x = REVOKED, fill = TARGET_FLAG)) +
   geom_bar() +
   labs(title="Insurance Data Categorical Variables - Revoked")
 
 #Imbalanced
 ```
 
-## TARGET VARIABLES
+## Numeric Data - Relationship to Target
 
 ```{r}
-ggplot(rawTrain, aes(x = factor(TARGET_FLAG), fill =factor(TARGET_FLAG))) +
-  geom_bar() +
-  labs(title="Insurance Data Categorical Variables - Revoked")
+#include target in the df for numeric data
+histData <- rawTrain %>%
+  select(TARGET_AMT, AGE, HOMEKIDS, YOJ,TRAVTIME, TIF, CLM_FREQ, MVR_PTS, CAR_AGE, INCOME, HOME_VAL, BLUEBOOK, OLDCLAIM)
 
-# Highly Skewed with lots of outliers
+#How do I color by Target_flag
+featurePlot(x= histData[3:8], y = histData[['TARGET_AMT']])
 
-ggplot(rawTrain, aes(x = TARGET_AMT, fill = 'red')) + geom_histogram() +
-  labs(title="Insurance Data Categorical Variables - TARGET AMT")
+featurePlot(x= histData[9:13], y = histData[['TARGET_AMT']])
 
-ggplot(rawTrain, aes(x = TARGET_AMT, fill = 'red')) + geom_boxplot() +
-  labs(title="Insurance Data Categorical Variables - TARGET AMT")
+#HOME KIDS and AGE NEED BAR CHARTS
 
-# Highly Skewed with lots of outliers
 ```
 
 ## Correlation
@@ -234,16 +229,96 @@ findCorrelation(cor(histData),cutoff = 0.75, verbose = TRUE, names = TRUE)
 # None of the numerical values are highly correlated
 ```
 
-----I AM UP TO HERE--------
-
-## Relationship to Target? 
-
-Use the appropriate column from the data set so you can plot a boxplot with target on the x-axis and variable on the y-axis.
-
-
-
-
 ## Data Cleaning 
 
-- oulier and missing value imputing
+```{r, message=FALSE, results="hide"}
+#due to skew home_val, income  will be imputed with median
+#Age YOJ with the mean
+
+#new DF
+prepTrain <- rawTrain %>%
+  select(-INDEX)
+
+#impute NAs
+prepTrain$AGE[is.na(prepTrain$AGE)] <- mean(prepTrain$AGE, na.rm=TRUE)
+prepTrain$YOJ[is.na(prepTrain$YOJ)] <- mean(prepTrain$YOJ, na.rm=TRUE)
+prepTrain$HOME_VAL[is.na(prepTrain$HOME_VAL)] <- median(prepTrain$HOME_VAL, na.rm=TRUE)
+prepTrain$INCOME[is.na(prepTrain$INCOME)] <- median(prepTrain$INCOME, na.rm=TRUE)
+prepTrain$CAR_AGE[is.na(prepTrain$CAR_AGE)] <- mean(prepTrain$CAR_AGE, na.rm=TRUE)
+
+# outlier detection and normalizing function
+outlier_norm <- function(x){
+  if (class(x) != "factor"){
+    qntile <- quantile(x, probs=c(.25, .75))
+     caps <- quantile(x, probs=c(.05, .95))
+     H <- 1.5 * IQR(x, na.rm = T)
+    x[x < (qntile[1] - H)] <- caps[1]
+     x[x > (qntile[2] + H)] <- caps[2]
+     return(x)
+  }
+}
+
+#Aply the function to the columns in the dataframe
+sapply(prepTrain, outlier_norm)
+```
+
+
+## Variable Importance
+
+```{r}
+prepTrainA <- prepTrain %>%
+  select(-TARGET_AMT)
+
+prepTrainB <- prepTrain %>%
+  select(-TARGET_FLAG)
+```
+
+```{r}
+# prepare training scheme
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+
+# train the model
+modelA <- train(TARGET_FLAG~., data=prepTrainA, method="lvq", preProcess="scale", trControl=control)
+# estimate variable importance
+importance <- varImp(modelA, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+```
+
+```{r}
+# train the model
+modelB <- train(TARGET_AMT~., data=prepTrainB, method="glm", preProcess="scale", trControl=control)
+# estimate variable importance
+importance <- varImp(modelB, scale=FALSE)
+# summarize importance
+print(importance)
+# plot importance
+plot(importance)
+
+```
+
+According to the plot above we can predict which variables would contribute best to the categorical predictions for `TARGET_FLAG`. We can use this to inform our data transformations.
+
+## Train Test Split
+
+```{r}
+## set the seed to make your partition reproducible
+set.seed(123)
+trainIndex<- sort(sample(nrow(prepTrain), nrow(prepTrain)*.8))
+
+train <- prepTrain[trainIndex, ]
+test <- prepTrain[-trainIndex, ]
+```
+
+# Models
+```{r}
+##Baseline (logistic regression)
+modelOne <- glm(formula = TARGET_FLAG ~ . - TARGET_AMT, data=train, family = "binomial" (link="logit"))
+summary(modelOne)
+```
+
+
+What is needed next is various models to be built after transforming some of these variables based on their shape ( I would also play around with multiplying and dividing variables etc). One thing worth mentioning is that we have to predict two things. So essentially we have to come up with two types of models and test each of them. I was thinking like 3-4 models for each target showing how we are using the shape of the variables to determine transformation, feature engineering and feature selection. 
 
