@@ -279,7 +279,7 @@ featurePlot(x= histData[11:13], y = histData[['TARGET_AMT']])
 
 Let's use a heat map to see the level of correlation of the numeric predictor variables.
 
-```{r}
+```{r fig.width = 7, fig.height = 4 }
 # Let's use a heat map to see the level of correlation of the numeric predictor variables.
 #correlation matrix for predictors
 ggcorr(rawTrain)
@@ -409,7 +409,7 @@ modelB <- train(TARGET_AMT~., data=prepTrainB, method="glm", preProcess="scale",
 saveRDS(modelB, "./varimportance_modelB.rds")
 ```
 
-```{r}
+```{r fig.width = 6, fig.height = 6}
 # load previously saved model
 modelB = readRDS("./varimportance_modelB.rds")
 
@@ -446,7 +446,7 @@ Using the training data set, build at least two different multiple linear regres
 Discuss the coefficients in the models, do they make sense? For example, if a person has a lot of traffic tickets, you would reasonably expect that person to have more car crashes. If the coefficient is negative (suggesting that the person is a safer driver), then that needs to be discussed. Are you keeping the model even though it is counter intuitive? Why? The boss needs to know.
 
 
-## Binary Logistic Regression
+## Binary Logistic Regression for dependent variable TARGET_FLAG
 
 
 ### Binary Logistic Regression Model 1
@@ -610,23 +610,45 @@ The variable `EDUCATION` seems to be statistically significant. At least for the
 ---------------------
 
 
-## Linear Regression Models
+## Linear Regression Models for dependent variable TARGET_AMT
+
 
 ### Linear Regression Model 1
 
-We begin with a `baseline` model that includes all the predictor variables and the response variable `TARGET_AMT`.
+For our first model, we only include the predictor variables that have `theoretical probably of effecting the payout if there is a crash`, which was provided as part of the definition of the variables.
 
 ```{r}
 #Baseline (linear regression)
-linearRegModel1 <- lm(formula = TARGET_AMT ~ . - TARGET_FLAG, data=train)
+linearRegModel1 <- lm(formula = TARGET_AMT ~ BLUEBOOK +
+                        CAR_AGE +
+                        CAR_TYPE  +
+                        CLM_FREQ +
+                        OLDCLAIM,
+                        data=train)
 summary(linearRegModel1)
 ```
+
+
+From the summary results we can see that we obtained low values for
+
+Multiple R-squared:  0.01945 and **Adjusted R-squared:  0.01809**
+
+Which, shows that using only predictor variables that have `theoretical probably of effecting the payout if there is a crash` is not a good way to go, for those variables do not seem to be enough to provide statistically significant results.
 
 
 
 ### Linear Regression Model 2
 
-For our second model, we only include the top 10 most important predictor variables that we gathered from our importance trained model `modelB`.
+For our second model, we only include the top 10 most important predictor variables that we gathered from our variable importance trained model `modelB`.
+
+Top 10 predictor variables from our importance model `modelB`:
+
+```{r}
+print(importanceB, 10)
+```
+
+
+Below are the results of applying our linear model 2 of TARGET_AMT vs Top 10 predictor variables.
 
 ```{r}
 #Baseline (linear regression)
@@ -645,22 +667,52 @@ summary(linearRegModel2)
 ```
 
 
+From the summary results we can see that we obtained much better values for
+
+Multiple R-squared:  0.05666,	**Adjusted R-squared:  0.05478**
+
+
+
+
+
 ### Linear Regression Model 3
 
-For our third model, we only include the predictor variables that have `theoretical probably of effecting the payout if there is a crash`, which was provided as part of the definition of the variables.
+We begin with a `baseline` model that includes all the predictor variables from Model 2 and the response variable `TARGET_AMT`.
+
+
+We remove the variables `CLM_FREQ` because its Pr value is 0.157159, which exceeds our requested 0.05 threshold.
+
+We will also add the next 6 variables from our variable importance model `modelB`. The added variables are: `KIDSDRIV`, `CLM_FREQ`, `INCOME`, `CAR_AGE`, `SEX`, and `BLUEBOOK`.
+
 
 ```{r}
 #Baseline (linear regression)
-linearRegModel3 <- lm(formula = TARGET_AMT ~ BLUEBOOK +
+linearRegModel3 <- lm(formula = TARGET_AMT ~ URBANICITY +
+                        MVR_PTS +
+                        CAR_USE  +
+                        CAR_TYPE +
+                        CAR_TYPE +
+                        TIF +
+                        MSTATUS +
+                        TRAVTIME +
+                        REVOKED +
+                        PARENT1 +
+                        KIDSDRIV +     
+                        CLM_FREQ  +    
+                        INCOME +
                         CAR_AGE +
-                        CAR_TYPE  +
-                        CLM_FREQ +
-                        OLDCLAIM,
-                        data=train)
+                        SEX +
+                        BLUEBOOK
+                        , data=train)
 summary(linearRegModel3)
 ```
 
 
+From the summary results above, we can see that the added variables have helped improve the values of our key indicators
+
+Multiple R-squared:  0.06527,	**Adjusted R-squared:  0.06254**
+
+However, now we have to be skeptical about adding too many predictor variables for we do not want to end up with potential multi-colinearity issues.
 
 
 
@@ -670,7 +722,7 @@ summary(linearRegModel3)
 
 ### Confusion Matrices
 
-We generate confusion matrices for our five models using a $p = 0.5$ cutoff.
+We generate confusion matrices for our five models using a $p = 0.5$ threshold.
 
 ```{r}
 logRegModel1_prediction <- predict(object = logRegModel1,data=train,type="response")
@@ -766,8 +818,89 @@ plot=TRUE)
 
 
 
+
+**TODO: Using the key measures based on the confusion matrices and ROC plots, we need to add narrative explaining which of the FIVE BINARY CLASSIFICATION MODELS is the best and why.**
+
+
+
+
+
+
+
+
+## Linear regression model option summary of TARGET_AMT
+
+### Model options summary
+
+Below is a summary of the key indicators for all three models to help us decide which model is the best.
+
+
+Model   |F-statistic |  p-value  | Adjusted R-squared  | Multiple R-squared
+--------|------------|-----------|---------------------|------------------- 
+Model 1 |      14.36 | < 2.2e-16 |            0.01809  |            0.01945
+Model 2 |      30.10 | < 2.2e-16 |            0.05478  |            0.05666
+Model 3 |      23.92 | < 2.2e-16 |            0.06254  |            0.06527
+
+
+### Residual Plots
+
+We now compare the Residual plots to help us decide on the selection of the best model.
+
+
+**Model 1**
+
+```{r fig.width = 8, fig.height = 3}
+
+par(mfrow=c(1, 4))
+
+plot(linearRegModel2)
+
+```
+
+**Model 2**
+
+```{r fig.width = 8, fig.height = 3}
+
+par(mfrow=c(1, 4))
+
+plot(linearRegModel2)
+
+```
+
+**Model 3**
+
+```{r fig.width = 8, fig.height = 3}
+
+par(mfrow=c(1, 4))
+
+plot(linearRegModel3)
+
+```
+
+
+```{r}
+
+par(mfrow=c(1,2))
+ 
+hist(linearRegModel1$residuals, xlab="Residuals",ylab="Number of records",main="Model 1")
+
+hist(linearRegModel2$residuals, xlab="Residuals",ylab="Number of records",main="Model 2")
+
+hist(linearRegModel3$residuals, xlab="Residuals",ylab="Number of records",main="Model 3")
+
+```
+
+
+
+**TODO 1: Make some adjustments to the Linear Models, so that residuals histogram plots are nearly normal.**
+
+
+**TODO 2: Using the summary model options table and the residual plots above, we need to add narrative explaining which of the THREE LINEAR MODELS is the best and why.**
+
+
 # Conclusions
 
+**TODO 3: Apply the chosen models for TARGET_FLAG and TARGET_AMT to the TEST (validation) data frame**
 
 
 
