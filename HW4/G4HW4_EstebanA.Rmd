@@ -27,6 +27,7 @@ library(caret)
 library(broom)
 library(naniar)
 library(stringr)
+library(pROC)
 ```
 
 
@@ -385,7 +386,7 @@ modelA = readRDS("./varimportance_modelA.rds")
 # estimate variable importance
 importanceA <- varImp(modelA, scale=FALSE)
 # summarize importance
-print(importanceA)
+print(importanceA, 23)
 # plot importance
 plot(importanceA)
 ```
@@ -415,7 +416,7 @@ modelB = readRDS("./varimportance_modelB.rds")
 # estimate variable importance
 importanceB <- varImp(modelB, scale=FALSE)
 # summarize importance
-print(importanceB)
+print(importanceB, 23)
 # plot importance
 plot(importanceB)
 
@@ -447,44 +448,83 @@ Discuss the coefficients in the models, do they make sense? For example, if a pe
 
 ## Binary Logistic Regression
 
+
 ### Binary Logistic Regression Model 1
 
-We begin with a `baseline` model that includes all the predictor variables and the response variable `TARGET_FLAG`.
+For this model, we only include the predictor variables that have `theoretical effect on probability of collition`, which was provided as part of the definition of the variables. 
+
+Additionally, we remove the variables that were deemed as
+
+- "urban legends", such as `RED_CAR` and `SEX`.
+- having a theoretical "unknown effect" on probability of collision, such as `EDUCATION`.
+
+Also, from our importance variable model `importanceA`, we know that the variables `RED_CAR` and `SEX` ranked in the bottom 2 items of the importance list of 23 items. Hence, we don't include them.
+
 
 
 ```{r}
-#Baseline (logistic regression)
-logRegModel1 <- glm(formula = TARGET_FLAG ~ . - TARGET_AMT, data=train, family = "binomial" (link="logit"))
+#(logistic regression)
+logRegModel1 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    YOJ,
+                    data=train, family = "binomial" (link="logit"))
 summary(logRegModel1)
 ```
 
 
 ### Binary Logistic Regression Model 2
 
-For our second model, we only include the top 10 most important predictor variables that we gathered from our importance trained model `modelA`.
+In order to improve on our first model, we use all the variables from Model 1, but we exclude the variables `YOJ`which proved to be the least statistically significant for our Model 1.
 
+Additionally, we include the variables `OLDCLAIM` and `URBANICITY`, which ranked 4th and 5th in our list of 23 predictor variable importance model `importanceA`,
+
+```{r}
+print(importanceA, 5)
+```
 
 
 ```{r}
 #(logistic regression)
-logRegModel2 <- glm(formula = TARGET_FLAG ~ CLM_FREQ +
-                      OLDCLAIM +
-                      MVR_PTS +
-                      HOME_VAL + 
-                      URBANICITY +
-                      INCOME +
-                      CAR_USE +
-                      MSTATUS +
-                      BLUEBOOK +
-                      HOMEKIDS,
+logRegModel2 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY,
                     data=train, family = "binomial" (link="logit"))
 summary(logRegModel2)
 ```
 
+We can see a significant improvement on the `Residual deviance` and `AIC` values.
+
 
 ### Binary Logistic Regression Model 3
 
-For our third model, we only include the predictor variables that have `theoretical effect on probability of collition`, which was provided as part of the definition of the variables.
+In order to improve on our previous model, we add the variables `BLUEBOOK` and `HOMEKIDS`, which ranked 9th and 10th in our list of 23 predictor variable importance model `importanceA`,
+
+At this point, the top 10 most statistically important of our set of 23 predictor variables are included in this model.
+
+```{r}
+print(importanceA, 10)
+```
 
 
 ```{r}
@@ -492,35 +532,38 @@ For our third model, we only include the predictor variables that have `theoreti
 logRegModel3 <- glm(formula = TARGET_FLAG ~ AGE +
                     CAR_USE +
                     CLM_FREQ +
-                    EDUCATION +
                     HOME_VAL +
                     INCOME +
                     JOB +
                     KIDSDRIV +
                     MSTATUS +
                     MVR_PTS +
-                    RED_CAR +
                     REVOKED +
-                    SEX +
                     TIF +
                     TRAVTIME +
-                    YOJ,
+                    OLDCLAIM +
+                    URBANICITY +
+                    BLUEBOOK +
+                    HOMEKIDS,
                     data=train, family = "binomial" (link="logit"))
 summary(logRegModel3)
 ```
 
+This time, we can see an even more significant improvement on the `Residual deviance` and `AIC` values.
+
 
 ### Binary Logistic Regression Model 4
 
-For our third model, we only include the predictor variables that have `theoretical effect on probability of collition`, which was provided as part of the definition of the variables. Additionally, we remove the variables that were deemed as "urban legends", such as `RED_CAR` and `SEX`.
+In order to improve on our previous model, we add the variables `CAR_AGE`, `PARENT1` and `EDUCATION`, which ranked 12th, 14th and 17th in our list of 23 predictor variable importance model `importanceA`,
+
+We also remove the variables `AGE` and `HOMEKIDS`, which from the previous models do not seem to contribute much. i.e. do not seem to be statistically significant for most of the models.
+
 
 
 ```{r}
 #(logistic regression)
-logRegModel4 <- glm(formula = TARGET_FLAG ~ AGE +
-                    CAR_USE +
+logRegModel4 <- glm(formula = TARGET_FLAG ~ CAR_USE +
                     CLM_FREQ +
-                    EDUCATION +
                     HOME_VAL +
                     INCOME +
                     JOB +
@@ -530,43 +573,42 @@ logRegModel4 <- glm(formula = TARGET_FLAG ~ AGE +
                     REVOKED +
                     TIF +
                     TRAVTIME +
-                    YOJ,
+                    OLDCLAIM +
+                    URBANICITY +
+                    BLUEBOOK +
+                    CAR_AGE +
+                    CAR_TYPE +
+                    PARENT1 +
+                    EDUCATION,
                     data=train, family = "binomial" (link="logit"))
 summary(logRegModel4)
 ```
 
 
+At this point, we can see most significant improvement on the `Residual deviance` and `AIC` values.
+
+
 ### Binary Logistic Regression Model 5
 
-For our third model, we only include the predictor variables that have `theoretical effect on probability of collition`, which was provided as part of the definition of the variables. 
 
-Additionally, we remove the variables that were as
-
-- "urban legends", such as `RED_CAR` and `SEX`.
-- having a theoretical "unknown effect" on probability of collision, such as `EDUCATION`.
+Just out of curiosity, what if we ignored all the statistical correlation and variable importance that we used for the previous four models. We use a model that includes all the predictor variables and the response variable `TARGET_FLAG`.
 
 
 ```{r}
-#(logistic regression)
-logRegModel5 <- glm(formula = TARGET_FLAG ~ AGE +
-                    CAR_USE +
-                    CLM_FREQ +
-                    HOME_VAL +
-                    INCOME +
-                    JOB +
-                    KIDSDRIV +
-                    MSTATUS +
-                    MVR_PTS +
-                    REVOKED +
-                    TIF +
-                    TRAVTIME +
-                    YOJ,
-                    data=train, family = "binomial" (link="logit"))
+#Baseline (logistic regression)
+logRegModel5 <- glm(formula = TARGET_FLAG ~ . - TARGET_AMT, data=train, family = "binomial" (link="logit"))
 summary(logRegModel5)
 ```
 
+The results above show the best improvement so far. 
+
+Even after seeing the most significant improvement of all models, we still see that variables `AGE`, `HOMEKIDS`, `SEX`, and `RED_CAR (yes)` are not statistically significant. Which, lead us to believe that it might be true that deeming the variables `RED_CAR` and `SEX` as "urban legends" might be just urban legends. Those variable show little to no correlation to the probability of collision.
+
+The variable `EDUCATION` seems to be statistically significant. At least for the values "Bachelors" and "Masters" we see that, based on the sign of their coefficients, they have a negative correlation to the theoretical probability of collision. So, it appears that people with higher education tend to have fewer accidents. 
+
 
 ---------------------
+
 
 ## Linear Regression Models
 
@@ -624,6 +666,103 @@ summary(linearRegModel3)
 
 # Model Selection
 
+## Binary logistic regression
+
+### Confusion Matrices
+
+We generate confusion matrices for our five models using a $p = 0.5$ cutoff.
+
+```{r}
+logRegModel1_prediction <- predict(object = logRegModel1,data=train,type="response")
+logRegModel2_prediction <- predict(object = logRegModel2,data=train,type="response")
+logRegModel3_prediction <- predict(object = logRegModel3,data=train,type="response")
+logRegModel4_prediction <- predict(object = logRegModel4,data=train,type="response")
+logRegModel5_prediction <- predict(object = logRegModel5,data=train,type="response")
+
+lvl <- levels(train$TARGET_FLAG)
+```
+
+**Confusion Matrix for Model 1:**
+
+```{r}
+confusionMatrix(data=factor(ifelse(logRegModel1_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+**Confusion Matrix for Model 2:**
+
+```{r}
+confusionMatrix(data=factor(ifelse(logRegModel2_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+
+**Confusion Matrix for Model 3:**
+
+```{r}
+confusionMatrix(data=factor(ifelse(logRegModel3_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+**Confusion Matrix for Model 4:**
+
+```{r}
+confusionMatrix(data=factor(ifelse(logRegModel4_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+
+**Confusion Matrix for Model 5:**
+
+```{r}
+confusionMatrix(data=factor(ifelse(logRegModel5_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+
+
+
+### ROC Curves
+
+We generate the ROC curves for all of our models.
+
+
+```{r fig.width = 4, fig.height = 3.5}
+roc(predictor = logRegModel1_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 1",
+plot=TRUE)
+
+roc(predictor = logRegModel2_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 2",
+plot=TRUE)
+
+roc(predictor = logRegModel3_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 3",
+plot=TRUE)
+
+roc(predictor = logRegModel4_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 4",
+plot=TRUE)
+
+roc(predictor = logRegModel5_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 5",
+plot=TRUE)
+```
 
 
 
