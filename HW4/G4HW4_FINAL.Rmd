@@ -1,0 +1,1396 @@
+---
+title: "Data 621 - Homework 4"
+author: "Group 4 \n Layla Quinones, Ian Costello, Dmitriy Burtsev & Esteban Aramayo "
+date: "11/21/2021"
+geometry: "left=1cm,right=1cm,top=1.25cm,bottom=1.25cm"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
+                      fig.width = 5, fig.height = 4 )
+```
+
+
+# Overview
+
+In this homework assignment, we explore, analyze and model a data set containing approximately 8,000
+records representing customers at an auto insurance company. Each record has two response variables: The
+first response variable, `TARGET_FLAG`, is a 1 or a 0. A “1” means that the person was in a car crash. A zero
+means that the person was not in a car crash. The second response variable is `TARGET_AMT`. This value is zero
+if the person did not crash their car. But if they did crash their car, this number will be a value greater than zero.
+
+Our objective is to build a multiple linear regression model and a binary logistic regression model on the training data
+to predict the probability that a person will crash their car, and also the amount of money it will cost if the person
+does crash their car. 
+
+## Libraries Used
+
+We use the standard libraries such as `tidyverse`, `ggplot2`, and `caret`. We also make use of the `pROC` package to construct the curves. **(Code Appendix 0.1.1)**
+
+```{r, message = FALSE}
+# Libraries
+
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(naniar)
+library(stringr)
+library(pROC)
+library(ggpubr)
+```
+
+# Data Exloration
+
+As usual, our data are stored on GitHub at our team’s main repository for easy access across team members **(Code Appendix 1.2)**. With our initial glimpse of the data, we noticed that there was variables that should be doubles that are classed as character strings **(Code Appendix 1.3)**. These seem to be on values with currency, such as income, cars values, and home values. We'll have to do some data cleaning before we continue with the exploration. 
+
+There are 8,161 observations in this data set and 26 columns. We know that `INDEX`, `TARGET_FLAG` and `TARGET_AMT` are not predictor variables. This gives us **8,161 observations** with **23 predictors** that are a combination of int, double and character data types. We also see that the character variables will have to converted to factors in order for us to explore their distributions. Variables such and `INCOME`, `HOME_VAL`, `BLUEBOOK`, `OLDCLAIM` will be converted to numeric because they are numbers with values that have meaning in their hierarchy.
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW4/insurance_training_data.csv", header = TRUE, stringsAsFactors = FALSE)
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW4/insurance-evaluation-data.csv")
+```
+
+```{r}
+# check to see if we need to clean the data 
+glimpse(rawTrain)
+```
+## Missing Values 
+
+```{r}
+#plot missing values using VIM package
+gg_miss_var(rawTrain)
+```
+
+**Figure 1. Plot of missing values**
+
+As shown in figure 1 **(Code Appendix 1.4)**, there are missing variables in the columns `Car_AGE`, `AGE` and `YOJ`. None of these exceed the 10% missing data, so we will continue with all variables for now and not dropping any of them.
+
+## Data Cleaning - Converting Data Types
+
+Before getting too far ahead, using regular expressions, we'll have to do some standard cleaning to remove the `$`, `z_`, and `,` and put in a different variable name from numeric strings. We'll also change all other character variables into factors. We'll glimpse the data again to confirm these changes.**(Code Appendix 1.5; 1.6)**
+
+```{r}
+#Let's remove the `$`, `z_` and `,` and put in a different variable name from numeric strings.
+
+rawTrain <- rawTrain %>% 
+  mutate(INCOME = gsub("\\$", "", INCOME),     #Remove $
+         HOME_VAL = gsub("\\$", "", HOME_VAL), 
+         BLUEBOOK = gsub("\\$", "", BLUEBOOK), 
+         OLDCLAIM = gsub("\\$", "", OLDCLAIM),
+         MSTATUS = gsub("z_", "", MSTATUS),
+         SEX = gsub("z_", "", SEX), 
+         EDUCATION= gsub("z_", "", EDUCATION),
+         JOB= gsub("z_", "", JOB),
+         CAR_TYPE= gsub("z_", "", CAR_TYPE),
+         URBANICITY= gsub("z_", "", URBANICITY),
+         INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
+         HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
+         BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
+         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM)),
+         TARGET_FLAG = as.factor(TARGET_FLAG)) 
+
+#Let's also change all other character variables into factors.
+rawTrain[sapply(rawTrain, is.character)] <- lapply(rawTrain[sapply(rawTrain, is.character)], 
+                                       as.factor)
+
+rawTest <- rawTest %>% 
+  mutate(INCOME = gsub("\\$", "", INCOME),     #Remove $
+         HOME_VAL = gsub("\\$", "", HOME_VAL), 
+         BLUEBOOK = gsub("\\$", "", BLUEBOOK), 
+         OLDCLAIM = gsub("\\$", "", OLDCLAIM),
+         MSTATUS = gsub("z_", "", MSTATUS),
+         SEX = gsub("z_", "", SEX), 
+         EDUCATION= gsub("z_", "", EDUCATION),
+         JOB= gsub("z_", "", JOB),
+         CAR_TYPE= gsub("z_", "", CAR_TYPE),
+         URBANICITY= gsub("z_", "", URBANICITY),
+         INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
+         HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
+         BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
+         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM)),
+         TARGET_FLAG = as.factor(TARGET_FLAG),
+         TARGET_AMT = as.numeric(TARGET_AMT))
+
+#Let's also change all other character variables into factors.
+rawTest[sapply(rawTest, is.character)] <- lapply(rawTest[sapply(rawTest, is.character)], 
+                                       as.factor)
+
+
+```
+
+```{r}
+# Let's glimpse the data to confirm the data cleaning.
+glimpse(rawTrain)
+```
+
+## Summary Statistics
+
+Displaying summary statistics **(Code Appendix 1.7)** again to confirm data cleaning and get a sense of the spread of the data elements.
+
+```{r results='hide'}
+#Display summary statistics again to confirm data cleaning.
+summary(rawTrain)
+```
+
+## Feature Histograms
+
+For each of the variables, these histograms in figure 2 **(Code Appendix 1.8)** provide a nice overview of each feature, its variation, and paths for potential transformations later on for model construction. Histograms are a quick way to see the shape of the distributions for each feature. Of note is the only normally distributed variable, age. The other features appear skewed to some degree. We can also begin to see the affect of outliers that we’ll have to account for later on.
+
+```{r fig.width=7, fig.height=4.5}
+# Let's plot the distribution of the numerical variables using histograms.
+# Histagrams for only the numerical data
+histData <- rawTrain %>%
+  select(AGE, HOMEKIDS, YOJ,TRAVTIME, TIF, CLM_FREQ, MVR_PTS, CAR_AGE, INCOME, HOME_VAL, BLUEBOOK, OLDCLAIM)
+
+par(mfrow = c(3,4))
+for(i in 1:ncol(histData)) {#distribution of each variable
+  hist(histData[[i]], main = colnames(histData[i]), col = "red")
+}
+```
+
+**Figure 2. Feature histograms**
+
+## Outlier Analysis
+
+### Feature Box Plots
+
+Let's identify the variables with outlier values using boxplots.**(Code Appendix 1.9)** From these initial box plots we can see that there are some outliers. In particular, `TRAVTIME`, `INCOME`, and `HOME_VAL` have many outliers which are spread out more  compared to the other variables.
+
+```{r}
+# Let's identify the variables with outlier values using boxplots.
+
+longData <- histData %>%
+  select(-HOME_VAL, -INCOME, -BLUEBOOK, -OLDCLAIM) %>%  # remove this for scale issue will plot below
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Insurance Data Variables - PART 1", y="Value")
+```
+
+**Figure 3. Feature box plot, part 1***
+
+```{r}
+longData2 <- histData %>%
+  select(HOME_VAL, INCOME, BLUEBOOK, OLDCLAIM) %>%  # remove this for scale issue will plot below
+  gather(key = Variable, value = Value)
+
+# generate boxplot to identify outliers
+ggplot(longData2, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Insurance Data Variables - PART 2", y="Value")
+```
+
+**Figure 4. Feature box plot, part 2**
+
+## Categorical Predictors - with target variable
+
+The figures below **(Code Appendix 1.10)** show each categorical feature and the prevalence of each factor. The balance and imbalance of factors may affect how models are built and function in the later part of this project. In reviewing each factor, the imbalance may lead us to select or exclude features.
+
+```{r fig.width=10, fig.height=8}
+
+#plot
+p1 <- ggplot(rawTrain, aes(x = PARENT1, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Single Parent (Parent 1)")
+
+#imbalanced here
+
+
+p2 <- ggplot(rawTrain, aes(x = MSTATUS, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Marital Status")
+
+#less imbalanced here
+
+p3 <- ggplot(rawTrain, aes(x = SEX, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - SEX")
+
+#I wouldnt consider this imbalanced but I am not sure what the threshold is for balance/imbalanced data
+
+p4 <- ggplot(rawTrain, aes(x = EDUCATION, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Max Education Level")
+
+#I wouldnt consider this imbalanced but I am not sure what the threshold is for balance/imbalanced data
+
+p5 <- ggplot(rawTrain, aes(x = JOB, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Job Category")
+
+#I wouldnt consider this imbalanced but I am not sure what the threshold is for balance/imbalanced data
+
+p6 <- ggplot(rawTrain, aes(x = CAR_USE, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Vehicle Use")
+
+#Imbalanced
+
+p7 <- ggplot(rawTrain, aes(x = CAR_TYPE, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Car Type")
+
+#Imbalanced
+
+p8 <- ggplot(rawTrain, aes(x = RED_CAR, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Red Car")
+
+#Imbalanced
+
+p9 <- ggplot(rawTrain, aes(x = REVOKED, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Licensed Revoked (Past 7 Years)")
+
+#Imbalanced
+
+ggarrange(p1, p2, p3, p4, p5, p6, p7, p8, p9,
+  ncol = 2, nrow = 5)
+```
+
+**Figure 5. Categorical variables showing balance/imbalance**
+
+## Numeric Data - Relationship to Target
+
+These plot visualizations (Figure 6) **(Code Appendix 1.11)** gives us an idea of the outliers we have in each variable, but does not give us a good sense of the distribution. We can use the histograms (Figure 2) above to interpret shape. If the notches of two boxes do not overlap, then this
+suggests that the medians are significantly different.
+
+For the features we see some outliers, we can decide to either throw out that variable out altogether and not consider it in our models or impute the outliers with median values. Before deciding on a course of action, we’ll look at a few other things.
+
+```{r fig.width=4}
+
+par(mfrow = c(5,3))
+
+#include target in the df for numeric data
+histData <- rawTrain %>%
+  select(TARGET_AMT, AGE, HOMEKIDS, YOJ,TRAVTIME, TIF, CLM_FREQ, MVR_PTS, CAR_AGE, INCOME, HOME_VAL, BLUEBOOK, OLDCLAIM)
+
+#How do I color by Targetflag
+featurePlot(x= histData[3:6], y = histData[['TARGET_AMT']])
+
+featurePlot(x= histData[7:10], y = histData[['TARGET_AMT']])
+
+featurePlot(x= histData[11:13], y = histData[['TARGET_AMT']])
+
+#HOME KIDS and AGE NEED BAR CHARTS
+
+```
+
+**Figure 6. Feature plots**
+
+## Correlation
+
+Let's use a heat map **(Code Appendix 1.12.1)** to see the level of correlation of the numeric predictor variables. From the correlation matrix (figure 7) below and from the `findCorrelation()` function **(Code Appendix 1.12.2)**, there does not appear to be any multiple colinearity we have to account for.
+
+```{r fig.width = 7, fig.height = 4 }
+# Let's use a heat map to see the level of correlation of the numeric predictor variables.
+#correlation matrix for predictors
+ggcorr(rawTrain)
+```
+
+**Figure 7. Correlation matrix**
+
+```{r}
+# Let's check if there are any highly correlated variables (correlation higher than 0.75) and drop them if necessary.
+findCorrelation(cor(histData),cutoff = 0.75, verbose = TRUE, names = TRUE)
+
+# None of the numerical values are highly correlated
+```
+
+# Data Preparation
+
+## Impute Missing Values
+
+For the missing values in `Age` and `YOJ` we will impute with the mean, and for `HOME_VAL`, `INCOME`, and `CAR_AGE` we will use the median. We determine this by observing their distribution and if there is more skew we'll take the median, more normal and we'll use mean. **(Code Appendix 2.2; 2.3)**
+
+```{r, message=FALSE, results='hide'}
+#due to skew home_val, income  will be imputed with median
+#Age YOJ with the mean
+
+#new DF
+prepTrain <- rawTrain %>%
+  select(-INDEX)
+
+#impute NAs
+prepTrain$AGE[is.na(prepTrain$AGE)] <- mean(prepTrain$AGE, na.rm=TRUE)
+prepTrain$YOJ[is.na(prepTrain$YOJ)] <- mean(prepTrain$YOJ, na.rm=TRUE)
+prepTrain$HOME_VAL[is.na(prepTrain$HOME_VAL)] <- median(prepTrain$HOME_VAL, na.rm=TRUE)
+prepTrain$INCOME[is.na(prepTrain$INCOME)] <- median(prepTrain$INCOME, na.rm=TRUE)
+prepTrain$CAR_AGE[is.na(prepTrain$CAR_AGE)] <- mean(prepTrain$CAR_AGE, na.rm=TRUE)
+```
+
+```{r, message=FALSE, results='hide'}
+# outlier detection and normalizing function
+outlier_norm <- function(x){
+  if (class(x) != "factor"){
+    qntile <- quantile(x, probs=c(.25, .75))
+     caps <- quantile(x, probs=c(.05, .95))
+     H <- 1.5 * IQR(x, na.rm = T)
+    x[x < (qntile[1] - H)] <- caps[1]
+     x[x > (qntile[2] + H)] <- caps[2]
+     return(x)
+  }
+}
+
+#Apply the function to the columns in the dataframe
+sapply(prepTrain, outlier_norm)
+```
+
+## Variable Importance 
+
+To determine the variable importance the following steps were taken **(Code Appendix 2.4; 2.5)**:
+
+- A training data frame `prepTrainA` was prepared for the `TARGET_FLAG` response variable and its associated predictor variables.
+- A training data frame `prepTrainB` was prepared for the `TARGET_AMT` response variable and its associated predictor variables.
+
+```{r}
+# V- A training data frame `prepTrainA` was prepared for the `TARGET_FLAG` response variable and its associated predictor variables.
+prepTrainA <- prepTrain %>%
+  select(-TARGET_AMT)
+
+# A training data frame `prepTrainB` was prepared for the `TARGET_AMT` response variable and its associated predictor variables.
+prepTrainB <- prepTrain %>%
+  select(-TARGET_FLAG)
+```
+
+- Using the `prepTrainA` data frame, a classification model `modelA` was trained using the `Learning Vector Quantization (lvq)` method. From it, the variable importance was summarized and plotted.
+
+```{r eval=FALSE}
+
+# Set eval=FALSE on this chunk to NOT BE executed and save time during iterative development and knitting
+# Set eval=TRUE on this chunk TO BE executed during final knitting
+
+
+# prepare training scheme
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+
+# Model `modelA` was trained using the `Learning Vector Quantization` method.
+modelA <- train(TARGET_FLAG~., data=prepTrainA, method="lvq", preProcess="scale", trControl=control)
+
+# save the model to disk to save time when knitting this file over and over during development
+saveRDS(modelA, "./varimportance_modelA.rds")
+```
+
+```{r}
+# load previously saved model
+modelA = readRDS("./varimportance_modelA.rds")
+
+# estimate variable importance
+importanceA <- varImp(modelA, scale=FALSE)
+# summarize importance
+print(importanceA, 23)
+```
+
+**Table 1. Feature importance - part A**
+
+```{r}
+# plot importance
+plot(importanceA)
+```
+
+**Figure 8. Plot of feature importance - part A**
+
+According to the plots above (figure 8), we can predict which variables would contribute best to the categorical predictions for `TARGET_FLAG`. We can use this to inform our data transformations.
+
+Using the `prepTrainB` data frame, a classification/regression model `modelB` was trained using the `Generalized Linear Model (glm)` method. From it, the variable importance was summarized and plotted.
+
+```{r eval=FALSE}
+
+# Set eval=FALSE on this chunk to NOT BE executed and save time during iterative development and knitting
+# Set eval=TRUE on this chunk TO BE executed during final knitting
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+# train the model
+modelB <- train(TARGET_AMT~., data=prepTrainB, method="glm", preProcess="scale", trControl=control)
+
+# save the model to disk to save time when knitting this file over and over during development
+saveRDS(modelB, "./varimportance_modelB.rds")
+```
+
+```{r fig.width = 6, fig.height = 6}
+# load previously saved model
+modelB = readRDS("./varimportance_modelB.rds")
+
+# estimate variable importance
+importanceB <- varImp(modelB, scale=FALSE)
+# summarize importance
+print(importanceB, 23)
+```
+
+**Table 2. Feature importance - part B**
+
+```{r}
+# plot importance
+plot(importanceB)
+```
+
+**Figure 9. Plot of feature importance - part B**
+
+According to the plots above, we can predict which variables would contribute best to the numerical predictions for `TARGET_AMT`. We can use this to inform our data transformations.
+
+## Train Test Split
+
+We partition **(Code Appendix 2.6)** the training data and set a seed in two data sets. One to be used for training purposes and one for validation/testing purposes.
+
+```{r}
+# set the seed to make your partition reproducible
+set.seed(123)
+trainIndex<- sort(sample(nrow(prepTrain), nrow(prepTrain)*.8))
+
+train <- prepTrain[trainIndex, ]
+test <- prepTrain[-trainIndex, ]
+```
+
+# Model Building
+
+## Binary Logistic Regression for dependent variable TARGET_FLAG
+
+### Binary Logistic Regression Model 1
+
+For this model **(Code Appendix 3.2.1)**, we only include the predictor variables that have `theoretical effect on probability of collition`, which was provided as part of the definition of the variables. 
+
+Additionally, we remove the variables that were deemed as "urban legends," such as `RED_CAR` and `SEX`. From our importance variable model `importanceA`, we know that the variables `RED_CAR` and `SEX` ranked in the bottom 2 items of the importance list of 23 items. Hence, we don't include them. We also exclude variables having a theoretical "unknown effect" on probability of collision, such as `EDUCATION`.
+
+$AIC = 6570.6$
+
+```{r results='hide'}
+#(logistic regression)
+logRegModel1 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    YOJ,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel1)
+```
+
+### Binary Logistic Regression Model 2
+
+In order to improve on our first model, we use all the variables from Model 1, but we exclude the variables `YOJ`, which proved to be the least statistically significant for our Model 1. **(Code Appendix 3.2.2)**
+
+Additionally, we include the variables `OLDCLAIM` and `URBANICITY`, which ranked 4th and 5th in our list of 23 predictor variable importance model `importanceA`.
+
+$AIC = 6053.2$
+
+```{r}
+print(importanceA, 5)
+```
+
+**Table 3. Feature importance - Binary model 2**
+
+```{r results='hide'}
+#(logistic regression)
+logRegModel2 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel2)
+```
+
+We can see a significant improvement on the `residual deviance` and `AIC` values.
+
+### Binary Logistic Regression Model 3
+
+In order to improve even more on our previous model, we add the variables `BLUEBOOK` and `HOMEKIDS`, which ranked 9th and 10th in our list of 23 predictor variable importance model `importanceA`. **(Code Appendix 3.2.3)**
+
+At this point, the top 10 most statistically important of our set of 23 predictor variables are included in this model. This time, we can see an even more significant improvement on the `residual deviance` and `AIC` values.
+
+$AIC = 6015$
+
+```{r}
+print(importanceA, 10)
+```
+**Table 4. Feature importance - Binary model 3**
+
+```{r results='hide'}
+#(logistic regression)
+logRegModel3 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY +
+                    BLUEBOOK +
+                    HOMEKIDS,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel3)
+```
+
+### Binary Logistic Regression Model 4
+
+Taking what we've learned from models 1-3, we add the variables `CAR_AGE`, `PARENT1` and `EDUCATION`, which ranked 12th, 14th and 17th in our list of 23 predictor variable importance model `importanceA`. **(Code Appendix 3.2.4)**
+
+We also remove the variables `AGE` and `HOMEKIDS`, which from the previous models do not seem to contribute much, i.e., do not seem to be statistically significant for most of the models.
+
+$AIC = 5897.7$
+
+```{r results='hide'}
+#(logistic regression)
+logRegModel4 <- glm(formula = TARGET_FLAG ~ CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY +
+                    BLUEBOOK +
+                    CAR_AGE +
+                    CAR_TYPE +
+                    PARENT1 +
+                    EDUCATION,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel4)
+```
+
+At this point, we can see most significant improvement on the `residual deviance` and `AIC` values.
+
+
+### Binary Logistic Regression Model 5
+
+Just out of curiosity, what if we ignored all the statistical correlation and variable importance that we used for the previous four models. We use a model that includes all the predictor variables and the response variable `TARGET_FLAG`. **(Code Appendix 3.2.5)**
+
+```{r results='hide'}
+#Baseline (logistic regression)
+logRegModel5 <- glm(formula = TARGET_FLAG ~ . - TARGET_AMT, data=train, family = "binomial" (link="logit"))
+summary(logRegModel5)
+```
+
+The results above show the best improvement so far. 
+
+Even after seeing the most significant improvement of all models, we still see that variables `AGE`, `HOMEKIDS`, `SEX`, and `RED_CAR (yes)` are not statistically significant. Which, lead us to believe that it might be true that deeming the variables `RED_CAR` and `SEX` as "urban legends" might be just urban legends. Those variable show little to no correlation to the probability of collision.
+
+The variable `EDUCATION` seems to be statistically significant. At least for the values "Bachelors" and "Masters" we see that, based on the sign of their coefficients, they have a negative correlation to the theoretical probability of collision. So, it appears that people with higher education tend to have fewer accidents. 
+
+$AIC = 5903.2$
+
+---------------------
+
+## Linear Regression Models for dependent variable TARGET_AMT
+
+### Linear Regression Model 1
+
+For our first model **(Code Appendix 3.3.1)**, we only include the predictor variables that have `theoretical probably of effecting the payout if there is a crash`, which was provided as part of the definition of the variables.
+
+```{r results='hide'}
+#Baseline (linear regression)
+linearRegModel1 <- lm(formula = TARGET_AMT ~ BLUEBOOK +
+                        CAR_AGE +
+                        CAR_TYPE  +
+                        CLM_FREQ +
+                        OLDCLAIM,
+                        data=train)
+summary(linearRegModel1)
+```
+
+From the summary results we can see that we obtained low values for
+
+Multiple R-squared:  0.01945 and **Adjusted R-squared:  0.01809**
+
+Which, shows that using only predictor variables that have `theoretical probably of effecting the payout if there is a crash` is not a good way to go, for those variables do not seem to be enough to provide statistically significant results.
+
+### Linear Regression Model 2
+
+For our second model, we only include the top 10 most important predictor variables that we gathered from our variable importance trained model `modelB`. **(Code Appendix 3.3.2)**
+
+```{r}
+print(importanceB, 10)
+```
+
+**Table 5. Top 10 predictor variables from importance model B**
+
+Below are the results of applying our linear model 2 of TARGET_AMT vs Top 10 predictor variables.
+
+```{r results='hide'}
+#Baseline (linear regression)
+linearRegModel2 <- lm(formula = TARGET_AMT ~ URBANICITY +
+                        MVR_PTS +
+                        CAR_USE  +
+                        CAR_TYPE +
+                        CAR_TYPE +
+                        TIF +
+                        MSTATUS +
+                        TRAVTIME +
+                        REVOKED +
+                        PARENT1,
+                        data=train)
+summary(linearRegModel2)
+```
+
+From the summary results we can see that we obtained much better values for
+
+Multiple R-squared:  0.05666,	**Adjusted R-squared:  0.05478**
+
+### Linear Regression Model 3
+
+We begin with a `baseline` model that includes all the predictor variables from Model 2 and the response variable `TARGET_AMT`. We remove the variables `CLM_FREQ` because its Pr value is 0.157159, which exceeds our requested 0.05 threshold. We will also add the next 6 variables from our variable importance model `modelB`. The added variables are: `KIDSDRIV`, `CLM_FREQ`, `INCOME`, `CAR_AGE`, `SEX`, and `BLUEBOOK`. **(Code Appendix 3.3.3)**
+
+```{r results='hide'}
+#Baseline (linear regression)
+linearRegModel3 <- lm(formula = TARGET_AMT ~ URBANICITY +
+                        MVR_PTS +
+                        CAR_USE  +
+                        CAR_TYPE +
+                        CAR_TYPE +
+                        TIF +
+                        MSTATUS +
+                        TRAVTIME +
+                        REVOKED +
+                        PARENT1 +
+                        KIDSDRIV +     
+                        CLM_FREQ  +    
+                        INCOME +
+                        CAR_AGE +
+                        SEX +
+                        BLUEBOOK
+                        , data=train)
+summary(linearRegModel3)
+```
+From the summary results above, we can see that the added variables have helped improve the values of our key indicators
+
+Multiple R-squared:  0.06527,	**Adjusted R-squared:  0.06254**
+
+However, now we have to be skeptical about adding too many predictor variables for we do not want to end up with potential multi-colinearity issues.
+
+# Model Selection
+
+## Binary logistic regression
+
+### Confusion Matrices
+
+We generate confusion matrices for our five models using a $p = 0.5$ threshold. **(Code Appendix 4.2.1)**
+
+```{r results='hide'}
+logRegModel1_prediction <- predict(object = logRegModel1,data=train,type="response")
+logRegModel2_prediction <- predict(object = logRegModel2,data=train,type="response")
+logRegModel3_prediction <- predict(object = logRegModel3,data=train,type="response")
+logRegModel4_prediction <- predict(object = logRegModel4,data=train,type="response")
+logRegModel5_prediction <- predict(object = logRegModel5,data=train,type="response")
+
+lvl <- levels(train$TARGET_FLAG)
+```
+
+```{r results='hide'}
+confusionMatrix(data=factor(ifelse(logRegModel1_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+```{r results='hide'}
+confusionMatrix(data=factor(ifelse(logRegModel2_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+```{r results='hide'}
+confusionMatrix(data=factor(ifelse(logRegModel3_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+```{r results='hide'}
+confusionMatrix(data=factor(ifelse(logRegModel4_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+```{r results='hide'}
+confusionMatrix(data=factor(ifelse(logRegModel5_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+### ROC Curves
+
+We generate the ROC curves for all of our models. **(Code Appendix 4.2.2)**
+
+```{r fig.width = 10, fig.height = 12}
+par(mfrow = c(5,2))
+
+roc1 <- roc(predictor = logRegModel1_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 1",
+plot=TRUE)
+
+roc2 <- roc(predictor = logRegModel2_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 2",
+plot=TRUE)
+
+roc3 <- roc(predictor = logRegModel3_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 3",
+plot=TRUE)
+
+roc4 <- roc(predictor = logRegModel4_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 4",
+plot=TRUE)
+
+roc5 <- roc(predictor = logRegModel5_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 5",
+plot=TRUE)
+```
+
+**Figure 9. ROC curves for models 1-5**
+
+The ROC curves in figure 9, show how the different binary models perform. Generally, a lower AIC and a steeper curve are indicators of better models. Model 5, while having a slightly high AIC than model 4, has a much better ROC curve. So we will likely select this for our binary model. 
+## Linear regression model option summary of TARGET_AMT
+
+### Model options summary
+
+Below is a summary of the key indicators for all three models to help us decide which model is the best. Based on the summary, we will select model one, with the lowest $R^2$ value.
+
+
+Model   |F-statistic |  p-value  | Adjusted R-squared  | Multiple R-squared
+--------|------------|-----------|---------------------|------------------- 
+Model 1 |      14.36 | < 2.2e-16 |            0.01809  |            0.01945
+Model 2 |      30.10 | < 2.2e-16 |            0.05478  |            0.05666
+Model 3 |      23.92 | < 2.2e-16 |            0.06254  |            0.06527
+
+**Table 6. Summary statistics of linear models**
+
+### Residual Plots
+
+We now compare the Residual plots **(Code Appendix 4.3.1)** to help us decide on the selection of the best model. The residual plots in figures 10 through 12, show that the distributions in the models are not looking that normal even after outlier imputation. **(Code Appendix 4.3.2)** Invoking the [central limit theorem (CLT)](https://boostedml.com/2019/03/linear-regression-plots-how-to-read-a-qq-plot.html) we will do nothing further as we have sufficient data to understand that the variance of the errors in these models is likely finite. 
+
+```{r fig.width = 8, fig.height = 3}
+
+par(mfrow=c(1, 4))
+
+plot(linearRegModel2)
+
+```
+
+**Figure 10. Model 1 plots**
+
+```{r fig.width = 8, fig.height = 3}
+
+par(mfrow=c(1, 4))
+
+plot(linearRegModel2)
+
+```
+
+**Figure 11. Model 2 plots**
+
+```{r fig.width = 8, fig.height = 3}
+summary(linearRegModel3)
+
+par(mfrow=c(1, 4))
+
+plot(linearRegModel3)
+
+```
+
+**Figure 12. Model 3 plots**
+
+```{r}
+
+par(mfrow=c(1,2))
+ 
+hist(linearRegModel1$residuals, xlab="Residuals",ylab="Number of records",main="Model 1")
+
+hist(linearRegModel2$residuals, xlab="Residuals",ylab="Number of records",main="Model 2")
+
+hist(linearRegModel3$residuals, xlab="Residuals",ylab="Number of records",main="Model 3")
+
+```
+
+**Figure 13. Plots of model residuals**
+
+# Conclusions
+
+With our models selected, we convlude this project by writing our predictions to the test data set. **(Code Appendix 5.1)**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+rawTest$target_prob <- predict(logRegModel5, newdata = rawTest)
+rawTest$TARGET_FLAG_PRED <- ifelse(rawTest$target_prob >= -1.362578885, 1, 0)
+rawTest$TARGET_AMT_PRED <- ifelse(rawTest$TARGET_FLAG_PRED == 0, 0, predict(linearRegModel1, newdata = rawTest))
+
+rawTest %>%
+  write.csv(., "insurance_pred.csv", row.names = F)
+```
+
+# Code Appendix
+
+# 0.1 Overview
+
+## 0.1.1 Libraries Used
+
+library(tidyverse)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(naniar)
+library(stringr)
+library(pROC)
+library(ggpubr)
+
+# 1.1 Data Exloration
+
+
+## 1.2 Data Import
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW4/insurance_training_data.csv", header = TRUE, stringsAsFactors = FALSE)
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW4/insurance-evaluation-data.csv")
+
+
+## 1.3 Glimpse on Training Data
+```{r echo = 'show'}
+glimpse(rawTrain)
+```
+
+## 1.4 Figure 1. Plot of missing values
+gg_miss_var(rawTrain)
+
+## 1.5 Data Cleaning - Converting Data Types
+rawTrain <- rawTrain %>% 
+  mutate(INCOME = gsub("\\$", "", INCOME),     #Remove $
+         HOME_VAL = gsub("\\$", "", HOME_VAL), 
+         BLUEBOOK = gsub("\\$", "", BLUEBOOK), 
+         OLDCLAIM = gsub("\\$", "", OLDCLAIM),
+         MSTATUS = gsub("z_", "", MSTATUS),
+         SEX = gsub("z_", "", SEX), 
+         EDUCATION= gsub("z_", "", EDUCATION),
+         JOB= gsub("z_", "", JOB),
+         CAR_TYPE= gsub("z_", "", CAR_TYPE),
+         URBANICITY= gsub("z_", "", URBANICITY),
+         INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
+         HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
+         BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
+         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM)),
+         TARGET_FLAG = as.factor(TARGET_FLAG)) 
+
+rawTrain[sapply(rawTrain, is.character)] <- lapply(rawTrain[sapply(rawTrain, is.character)], 
+                                       as.factor)
+
+rawTest <- rawTest %>% 
+  mutate(INCOME = gsub("\\$", "", INCOME),     #Remove $
+         HOME_VAL = gsub("\\$", "", HOME_VAL), 
+         BLUEBOOK = gsub("\\$", "", BLUEBOOK), 
+         OLDCLAIM = gsub("\\$", "", OLDCLAIM),
+         MSTATUS = gsub("z_", "", MSTATUS),
+         SEX = gsub("z_", "", SEX), 
+         EDUCATION= gsub("z_", "", EDUCATION),
+         JOB= gsub("z_", "", JOB),
+         CAR_TYPE= gsub("z_", "", CAR_TYPE),
+         URBANICITY= gsub("z_", "", URBANICITY),
+         INCOME = as.numeric(gsub(",", "", INCOME)),     #remove , and cast to numeric
+         HOME_VAL = as.numeric(gsub(",", "", HOME_VAL)), 
+         BLUEBOOK = as.numeric(gsub(",", "", BLUEBOOK)), 
+         OLDCLAIM = as.numeric(gsub(",", "", OLDCLAIM)),
+         TARGET_FLAG = as.factor(TARGET_FLAG),
+         TARGET_AMT = as.numeric(TARGET_AMT))
+
+
+rawTest[sapply(rawTest, is.character)] <- lapply(rawTest[sapply(rawTest, is.character)], 
+                                       as.factor)
+
+## 1.6 Confirmation glimpse 
+```{r echo = 'show'}
+glimpse(rawTrain)
+```
+
+## 1.7 Summary Statistics
+```{r echo = 'show'}
+summary(rawTrain)
+```
+
+## 1.8 Figure 2. Feature histograms
+histData <- rawTrain %>%
+  select(AGE, HOMEKIDS, YOJ,TRAVTIME, TIF, CLM_FREQ, MVR_PTS, CAR_AGE, INCOME, HOME_VAL, BLUEBOOK, OLDCLAIM)
+
+par(mfrow = c(3,4))
+for(i in 1:ncol(histData)) {#distribution of each variable
+  hist(histData[[i]], main = colnames(histData[i]), col = "red")}
+
+## 1.9 Outlier Analysis
+
+### 1.9.1 Figure 3. Feature box plot, part 1
+longData <- histData %>%
+  select(-HOME_VAL, -INCOME, -BLUEBOOK, -OLDCLAIM) %>%  # remove this for scale issue will plot below
+  gather(key = Variable, value = Value)
+
+ggplot(longData, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Insurance Data Variables - PART 1", y="Value")
+
+### 1.9.2 Figure 4. Feature box plot, part 2
+longData2 <- histData %>%
+  select(HOME_VAL, INCOME, BLUEBOOK, OLDCLAIM) %>%  # remove this for scale issue will plot below
+  gather(key = Variable, value = Value)
+
+ggplot(longData2, aes(Variable, Value, fill = Variable)) +geom_boxplot(outlier.colour="blue", 
+               outlier.shape=4, 
+               outlier.size=2, 
+               show.legend=FALSE) + 
+   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()+
+  labs(title="Insurance Data Variables - PART 2", y="Value")
+
+## 1.10 Figure 5. Categorical variables showing balance/imbalance
+
+p1 <- ggplot(rawTrain, aes(x = PARENT1, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Single Parent (Parent 1)")
+p2 <- ggplot(rawTrain, aes(x = MSTATUS, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Marital Status")
+p3 <- ggplot(rawTrain, aes(x = SEX, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - SEX")
+p4 <- ggplot(rawTrain, aes(x = EDUCATION, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Max Education Level")
+p5 <- ggplot(rawTrain, aes(x = JOB, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Job Category")
+p6 <- ggplot(rawTrain, aes(x = CAR_USE, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Vehicle Use")
+p7 <- ggplot(rawTrain, aes(x = CAR_TYPE, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Car Type")
+p8 <- ggplot(rawTrain, aes(x = RED_CAR, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Red Car")
+p9 <- ggplot(rawTrain, aes(x = REVOKED, fill = TARGET_FLAG)) +
+  geom_bar() +
+  labs(title="Insurance Data Categorical Variables - Licensed Revoked (Past 7 Years)")
+ggarrange(p1, p2, p3, p4, p5, p6, p7, p8, p9,
+  ncol = 2, nrow = 5)
+
+## 1.11 Numeric Data - Relationship to Target / Figure 6. Feature plots
+par(mfrow = c(5,3))
+
+histData <- rawTrain %>%
+  select(TARGET_AMT, AGE, HOMEKIDS, YOJ,TRAVTIME, TIF, CLM_FREQ, MVR_PTS, CAR_AGE, INCOME, HOME_VAL, BLUEBOOK, OLDCLAIM)
+
+featurePlot(x= histData[3:6], y = histData[['TARGET_AMT']])
+featurePlot(x= histData[7:10], y = histData[['TARGET_AMT']])
+featurePlot(x= histData[11:13], y = histData[['TARGET_AMT']])
+
+## 1.12 Correlation
+
+### 1.12.1 Figure 7. Correlation matrix
+ggcorr(rawTrain)
+
+### 1.12.2 findCorrelation() function
+findCorrelation(cor(histData),cutoff = 0.75, verbose = TRUE, names = TRUE)
+
+# 2.1 Data Preparation
+
+## 2.2 Impute Missing Values
+
+```{r, message=FALSE,echo = 'show'}
+#due to skew home_val, income  will be imputed with median
+#Age YOJ with the mean
+
+#new DF
+prepTrain <- rawTrain %>%
+  select(-INDEX)
+
+#impute NAs
+prepTrain$AGE[is.na(prepTrain$AGE)] <- mean(prepTrain$AGE, na.rm=TRUE)
+prepTrain$YOJ[is.na(prepTrain$YOJ)] <- mean(prepTrain$YOJ, na.rm=TRUE)
+prepTrain$HOME_VAL[is.na(prepTrain$HOME_VAL)] <- median(prepTrain$HOME_VAL, na.rm=TRUE)
+prepTrain$INCOME[is.na(prepTrain$INCOME)] <- median(prepTrain$INCOME, na.rm=TRUE)
+prepTrain$CAR_AGE[is.na(prepTrain$CAR_AGE)] <- mean(prepTrain$CAR_AGE, na.rm=TRUE)
+```
+
+## 2.3 Outlier detection
+
+outlier_norm <- function(x){
+  if (class(x) != "factor"){
+    qntile <- quantile(x, probs=c(.25, .75))
+     caps <- quantile(x, probs=c(.05, .95))
+     H <- 1.5 * IQR(x, na.rm = T)
+    x[x < (qntile[1] - H)] <- caps[1]
+     x[x > (qntile[2] + H)] <- caps[2]
+     return(x)
+  }
+}
+
+sapply(prepTrain, outlier_norm)
+
+## 2.4 Variable Importance - Part A
+prepTrainA <- prepTrain %>%
+  select(-TARGET_AMT)
+prepTrainB <- prepTrain %>%
+  select(-TARGET_FLAG)
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+modelA <- train(TARGET_FLAG~., data=prepTrainA, method="lvq", preProcess="scale", trControl=control)
+saveRDS(modelA, "./varimportance_modelA.rds")
+
+### 2.4.1 Table 1. Feature importance - part A
+modelA = readRDS("./varimportance_modelA.rds")
+importanceA <- varImp(modelA, scale=FALSE)
+print(importanceA, 23)
+
+### 2.4.2 Figure 8. Plot of feature importance - part A
+plot(importanceA)
+
+## 2.4 Variable Importance - Part B
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+modelB <- train(TARGET_AMT~., data=prepTrainB, method="glm", preProcess="scale", trControl=control)
+saveRDS(modelB, "./varimportance_modelB.rds")
+
+### 2.5.1 Table 2. Feature importance - part B
+modelB = readRDS("./varimportance_modelB.rds")
+importanceB <- varImp(modelB, scale=FALSE)
+print(importanceB, 23)
+
+### 2.5.2 Figure 9. Plot of feature importance - part B
+plot(importanceB)
+
+## 2.6 Train Test Split
+set.seed(123)
+trainIndex<- sort(sample(nrow(prepTrain), nrow(prepTrain)*.8))
+
+train <- prepTrain[trainIndex, ]
+test <- prepTrain[-trainIndex, ]
+
+# 3.1 Model Building
+
+## 3.2 Binary Logistic Regression for dependent variable TARGET_FLAG
+
+### 3.2.1 Binary Logistic Regression Model 1
+
+```{r echo = 'show'}
+#(logistic regression)
+logRegModel1 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    YOJ,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel1)
+```
+
+### 3.2.2 Binary Logistic Regression Model 2
+
+```{r echo = 'show'}
+#(logistic regression)
+logRegModel2 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel2)
+```
+
+### 3.2.3 Binary Logistic Regression Model 3
+
+```{r echo = 'show'}
+#(logistic regression)
+logRegModel3 <- glm(formula = TARGET_FLAG ~ AGE +
+                    CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY +
+                    BLUEBOOK +
+                    HOMEKIDS,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel3)
+```
+
+### 3.2.4 Binary Logistic Regression Model 4
+
+```{r echo = 'show'}
+#(logistic regression)
+logRegModel4 <- glm(formula = TARGET_FLAG ~ CAR_USE +
+                    CLM_FREQ +
+                    HOME_VAL +
+                    INCOME +
+                    JOB +
+                    KIDSDRIV +
+                    MSTATUS +
+                    MVR_PTS +
+                    REVOKED +
+                    TIF +
+                    TRAVTIME +
+                    OLDCLAIM +
+                    URBANICITY +
+                    BLUEBOOK +
+                    CAR_AGE +
+                    CAR_TYPE +
+                    PARENT1 +
+                    EDUCATION,
+                    data=train, family = "binomial" (link="logit"))
+summary(logRegModel4)
+```
+
+### 3.2.5 Binary Logistic Regression Model 5
+
+```{r echo = 'show'}
+#Baseline (logistic regression)
+logRegModel5 <- glm(formula = TARGET_FLAG ~ . - TARGET_AMT, data=train, family = "binomial" (link="logit"))
+summary(logRegModel5)
+```
+
+---------------------
+
+## 3.3 Linear Regression Models for dependent variable TARGET_AMT
+
+### 3.3.1 Linear Regression Model 1
+
+```{r echo = 'show'}
+#Baseline (linear regression)
+linearRegModel1 <- lm(formula = TARGET_AMT ~ BLUEBOOK +
+                        CAR_AGE +
+                        CAR_TYPE  +
+                        CLM_FREQ +
+                        OLDCLAIM,
+                        data=train)
+summary(linearRegModel1)
+```
+
+### 3.3.2 Linear Regression Model 2
+
+```{r echo = 'show'}
+#Baseline (linear regression)
+linearRegModel2 <- lm(formula = TARGET_AMT ~ URBANICITY +
+                        MVR_PTS +
+                        CAR_USE  +
+                        CAR_TYPE +
+                        CAR_TYPE +
+                        TIF +
+                        MSTATUS +
+                        TRAVTIME +
+                        REVOKED +
+                        PARENT1,
+                        data=train)
+summary(linearRegModel2)
+```
+
+### 3.3.3 Linear Regression Model 3
+
+```{r echo = 'show'}
+#Baseline (linear regression)
+linearRegModel3 <- lm(formula = TARGET_AMT ~ URBANICITY +
+                        MVR_PTS +
+                        CAR_USE  +
+                        CAR_TYPE +
+                        CAR_TYPE +
+                        TIF +
+                        MSTATUS +
+                        TRAVTIME +
+                        REVOKED +
+                        PARENT1 +
+                        KIDSDRIV +     
+                        CLM_FREQ  +    
+                        INCOME +
+                        CAR_AGE +
+                        SEX +
+                        BLUEBOOK
+                        , data=train)
+summary(linearRegModel3)
+```
+
+# 4.1 Model Selection
+
+## 4.2 Binary logistic regression
+
+### 4.2.1 Confusion Matrices
+
+```{r echo = 'show'}
+logRegModel1_prediction <- predict(object = logRegModel1,data=train,type="response")
+logRegModel2_prediction <- predict(object = logRegModel2,data=train,type="response")
+logRegModel3_prediction <- predict(object = logRegModel3,data=train,type="response")
+logRegModel4_prediction <- predict(object = logRegModel4,data=train,type="response")
+logRegModel5_prediction <- predict(object = logRegModel5,data=train,type="response")
+
+lvl <- levels(train$TARGET_FLAG)
+```
+
+**Confusion Matrix for Model 1:**
+
+```{r echo = 'show'}
+confusionMatrix(data=factor(ifelse(logRegModel1_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+**Confusion Matrix for Model 2:**
+
+```{r echo = 'show'}
+confusionMatrix(data=factor(ifelse(logRegModel2_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+**Confusion Matrix for Model 3:**
+
+```{r echo = 'show'}
+confusionMatrix(data=factor(ifelse(logRegModel3_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+**Confusion Matrix for Model 4:**
+
+```{r echo = 'show'}
+confusionMatrix(data=factor(ifelse(logRegModel4_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+**Confusion Matrix for Model 5:**
+
+```{r echo = 'show'}
+confusionMatrix(data=factor(ifelse(logRegModel5_prediction > 0.5,1,0), levels = lvl),
+reference=train$TARGET_FLAG,
+positive="1")
+```
+
+### 4.2.2 Figure 9. ROC curves for models 1-5
+par(mfrow = c(5,2))
+
+roc1 <- roc(predictor = logRegModel1_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 1",
+plot=TRUE)
+
+roc2 <- roc(predictor = logRegModel2_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 2",
+plot=TRUE)
+
+roc3 <- roc(predictor = logRegModel3_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 3",
+plot=TRUE)
+
+roc4 <- roc(predictor = logRegModel4_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 4",
+plot=TRUE)
+
+roc5 <- roc(predictor = logRegModel5_prediction,
+response = train$TARGET_FLAG,
+print.thres=c(0.25,0.30,0.35,0.40,0.45,0.5),
+main="Model 5",
+plot=TRUE)
+
+## 4.3 Linear regression model option summary of TARGET_AMT
+
+### 4.3.1 Figure 12. Residual Plots
+
+par(mfrow=c(1, 4))
+plot(linearRegModel2)
+
+par(mfrow=c(1, 4))
+plot(linearRegModel2)
+
+par(mfrow=c(1, 4))
+plot(linearRegModel3)
+
+### 4.3.2 Figure 13. Plots of model residuals
+par(mfrow=c(1,2))
+hist(linearRegModel1$residuals, xlab="Residuals",ylab="Number of records",main="Model 1")
+hist(linearRegModel2$residuals, xlab="Residuals",ylab="Number of records",main="Model 2")
+hist(linearRegModel3$residuals, xlab="Residuals",ylab="Number of records",main="Model 3")
+
+# 5.1 Conclusions
+
+rawTest$target_prob <- predict(logRegModel5, newdata = rawTest)
+rawTest$TARGET_FLAG_PRED <- ifelse(rawTest$target_prob >= -1.362578885, 1, 0)
+rawTest$TARGET_AMT_PRED <- ifelse(rawTest$TARGET_FLAG_PRED == 0, 0, predict(linearRegModel1, newdata = rawTest))
+
+rawTest %>%
+  write.csv(., "insurance_pred.csv", row.names = F)
