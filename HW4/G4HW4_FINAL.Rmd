@@ -793,6 +793,7 @@ plot=TRUE)
 **Figure 9. ROC curves for models 1-5**
 
 The ROC curves in figure 9, show how the different binary models perform. Generally, a lower AIC and a steeper curve are indicators of better models. Model 5, while having a slightly high AIC than model 4, has a much better ROC curve. So we will likely select this for our binary model. 
+
 ## Linear regression model option summary of TARGET_AMT
 
 ### Model options summary
@@ -833,12 +834,9 @@ plot(linearRegModel2)
 **Figure 11. Model 2 plots**
 
 ```{r fig.width = 8, fig.height = 3}
-summary(linearRegModel3)
-
 par(mfrow=c(1, 4))
 
 plot(linearRegModel3)
-
 ```
 
 **Figure 12. Model 3 plots**
@@ -859,7 +857,7 @@ hist(linearRegModel3$residuals, xlab="Residuals",ylab="Number of records",main="
 
 # Conclusions
 
-With our models selected, we convlude this project by writing our predictions to the test data set. **(Code Appendix 5.1)**
+With our models selected, we conclude this project by writing our predictions to the test data set. **(Code Appendix 5.1)**
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 rawTest$target_prob <- predict(logRegModel5, newdata = rawTest)
