@@ -1,0 +1,93 @@
+---
+title: "Data 621 - Homework 5"
+author: "Group 4 \n Esteban Aramayo, Dmitriy Burtsev, Ian Costello, & Layla Quinones"
+date: "12/6/2021"
+output: pdf_document
+---
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
+                      fig.width = 5, fig.height = 4 )
+```
+
+# Overview
+
+In this homework assignment, we explore, analyze and model a data set containing approximately 12,000 records representing commercially available wines. Each record has a target variable representing the number of cases purchased. Along with the target variable, there are fourteen predictor variables we will use to construct a count regression model. This model will seek to predict the number of cases that will be sold given certain properties of wine.
+
+## Libraries Used
+
+We use the standard libraries such as `tidyverse`, `ggplot2`, and `caret`.
+
+```{r, message = FALSE}
+# Libraries
+
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(naniar)
+library(stringr)
+library(ggpubr)
+```
+
+# Data Exploration
+
+As usual, our data are stored on GitHub at our team’s main repository for easy access across team members **(Code Appendix 1.2)**. With our initial glimpse of the data, we know that all our data set is coded correctly as either doubles or integers. **(Code Appendix 1.3)**.
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW5/wine-training-data.csv", header = TRUE, stringsAsFactors = FALSE)
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW5/wine-evaluation-data.csv", header = TRUE, stringsAsFactors = FALSE)
+```
+
+```{r}
+# check to see if we need to clean the data 
+glimpse(rawTrain)
+```
+
+## Missing Values
+
+Looking at the missing values for the data set, `STARS` has over 3,000 missing values. This makes sense since a team of experts can't realistically rate every bottle of wine. For the others it may make sense to impute the other missing values. For the `STARS` variable we will derive one more variable `STARSRating`, indicating whether a rating was conducted (no matter the score) or not.
+
+```{r}
+#plot missing values using VIM package
+gg_miss_var(rawTrain)
+```
+
+**Figure 1. Plot of Missing Values**
+
+```{r}
+rawTrain <- rawTrain %>%
+  mutate(STARSRating = as.integer(ifelse(is.na(STARS),0,1)))
+
+rawTest <- rawTest %>%
+  mutate(STARSRating = as.integer(ifelse(is.na(STARS),0,1)))
+```
+
+## Summary Statistics
+
+```{r}
+describe(rawTrain)
+```
+
+**Table 1. Summary stats and description of data set**
+
+```{r fig.width=7, fig.height=9}
+
+histData <- rawTrain %>%
+  select(-"ï..INDEX")
+
+par(mfrow = c(4,2))
+for(i in 1:ncol(histData)) {#distribution of each variable
+  hist(histData[[i]], main = colnames(histData[i]), col = "red")
+}
+```
+
+
+
