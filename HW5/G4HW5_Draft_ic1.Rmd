@@ -251,20 +251,3 @@ summary(negative_binom)
 plot(negative_binom)
 ```
 
-```{r}
-lm1 <- lm(TARGET ~ 
-                as.factor(LabelAppeal) +
-                as.factor(AcidIndex) +
-                as.factor(STARS),
-              data=train)
-summary(lm1)
-plot(lm1)
-```
-
-```{r}
-lm2 <- lm(TARGET ~ ., data=train)
-summary(lm2)
-plot(lm2)
-```
-
-
