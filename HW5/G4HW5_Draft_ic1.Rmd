@@ -1,0 +1,270 @@
+---
+title: "Data 621 - Homework 5"
+author: "Group 4 \n Esteban Aramayo, Dmitriy Burtsev, Ian Costello, & Layla Quinones"
+date: "12/6/2021"
+output: pdf_document
+---
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
+                      fig.width = 5, fig.height = 4 )
+```
+
+# Overview
+
+In this homework assignment, we explore, analyze and model a data set containing approximately 12,000 records representing commercially available wines. Each record has a target variable representing the number of cases purchased. Along with the target variable, there are fourteen predictor variables we will use to construct a count regression model. This model will seek to predict the number of cases that will be sold given certain properties of wine.
+
+## Libraries Used
+
+We use the standard libraries such as `tidyverse`, `ggplot2`, and `caret`.
+
+```{r, message = FALSE}
+# Libraries
+library(MASS)
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(VIM)
+library(GGally)
+library(caret)
+library(broom)
+library(naniar)
+library(stringr)
+library(ggpubr)
+
+```
+
+# Data Exploration
+
+As usual, our data are stored on GitHub at our team’s main repository for easy access across team members **(Code Appendix 1.2)**. With our initial glimpse of the data, we know that all our data set is coded correctly as either doubles or integers. **(Code Appendix 1.3)**.
+
+```{r}
+# Load data
+# Training
+rawTrain <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW5/wine-training-data.csv", header = TRUE, stringsAsFactors = FALSE) %>%
+  select(-"ï..INDEX")
+
+#Testing data
+rawTest <- read.csv("https://raw.githubusercontent.com/MsQCompSci/Data621Group4/main/HW5/wine-evaluation-data.csv", header = TRUE, stringsAsFactors = FALSE)%>%
+  select(-"IN")
+```
+
+```{r}
+# check to see if we need to clean the data 
+glimpse(rawTrain)
+```
+
+## Missing Values
+
+Looking at the missing values for the data set, `STARS` has over 3,000 missing values. This makes sense since a team of experts can't realistically rate every bottle of wine. For the others it may make sense to impute the other missing values. For the `STARS` variable we will derive one more variable `STARSRating`, indicating whether a rating was conducted (no matter the score) or not.
+
+```{r}
+#plot missing values using VIM package
+gg_miss_var(rawTrain)
+```
+
+**Figure 1. Plot of Missing Values**
+
+```{r}
+rawTrain <- rawTrain %>%
+  mutate(STARSRating = as.integer(ifelse(is.na(STARS),0,1)))
+
+rawTest <- rawTest %>%
+  mutate(STARSRating = as.integer(ifelse(is.na(STARS),0,1)))
+```
+
+## Summary Statistics
+
+```{r}
+describe(rawTrain)
+```
+
+**Table 1. Summary stats and description of data set**
+
+```{r fig.width=7, fig.height=9}
+
+histData <- rawTrain
+
+par(mfrow = c(4,2))
+for(i in 1:ncol(histData)) {#distribution of each variable
+  hist(histData[[i]], main = colnames(histData[i]), col = "blue")
+}
+```
+
+## Outlier Analysis
+
+### Feature Box Plots
+
+```{r}
+# Let's identify the variables with outlier values using boxplots.
+
+boxplots <- rawTrain %>%
+  select(-TARGET, -STARSRating) %>%
+  gather(Measure, Value) %>%
+  ggplot(aes(y = Value)) +
+  geom_boxplot() +
+  facet_wrap(~Measure
+             , scales = "free_y")
+boxplots
+```
+## Numeric Data - Relationship to Target
+
+```{r }
+
+par(mfrow = c(5,3))
+
+#include target in the df for numeric data
+histData <- rawTrain
+
+#How do I color by Targetflag
+
+featurePlot(x= histData[3:6], y = histData[['TARGET']])
+
+featurePlot(x= histData[7:9], y = histData[['TARGET']])
+
+featurePlot(x= histData[10:12], y = histData[['TARGET']])
+
+featurePlot(x= histData[13:15], y = histData[['TARGET']])
+
+
+```
+
+## Correlation
+
+```{r fig.width = 7, fig.height = 4 }
+# Let's use a heat map to see the level of correlation of the numeric predictor variables.
+#correlation matrix for predictors
+ggcorr(rawTrain)
+```
+
+```{r}
+# Let's check if there are any highly correlated variables (correlation higher than 0.75) and drop them if necessary.
+findCorrelation(cor(histData),cutoff = 0.75, verbose = TRUE, names = TRUE)
+
+# None of the numerical values are highly correlated
+```
+
+# Data Preparation
+
+## Treatment of Missing Data
+
+```{r}
+set.seed(123)
+
+rawTrain$STARS <- rawTrain$STARS %>%
+    replace_na(0)
+rawTest$STARS <- rawTest$STARS %>%
+    replace_na(0)
+
+test_x <- rawTest %>%
+  select(-TARGET, -STARS, -STARSRating)
+test_y <- rawTest  %>%
+  select(TARGET, STARS, STARSRating)
+train_x <- rawTrain %>%
+  select(-TARGET, -STARS, -STARSRating)
+train_y <- rawTrain  %>%
+  select(TARGET, STARS, STARSRating)
+
+impute <- preProcess(train_x, method = c("BoxCox","knnImpute"))
+
+train_x_impute <- predict(impute, train_x)
+test_x_impute <- predict(impute, test_x)
+
+prepTrain <- cbind(train_y, train_x_impute) %>%
+  as.data.frame()
+prepTest <- cbind(train_y, train_x_impute) %>%
+  as.data.frame()
+```
+
+```{r}
+histData1 <- prepTrain
+
+par(mfrow = c(3,2))
+for(i in 1:ncol(histData)) {#distribution of each variable
+  hist(histData[[i]], main = colnames(histData[i]), col = "blue")
+}
+```
+
+```{r fig.width = 7, fig.height = 4 }
+# Let's use a heat map to see the level of correlation of the numeric predictor variables.
+#correlation matrix for predictors
+ggcorr(prepTrain)
+findCorrelation(cor(histData1),cutoff = 0.75, verbose = TRUE, names = TRUE)
+prepTrain <- prepTrain %>%
+  select(-STARSRating)
+prepTest <- prepTest %>%
+  select(-STARSRating)
+```
+
+## Variable Importance
+
+```{r eval=FALSE}
+stack(sort(cor(prepTrain[,1], prepTrain[,2:ncol(prepTrain)])[,], decreasing=TRUE))
+```
+
+# Building Models 
+
+```{r}
+# set the seed to make your partition reproducible
+trainIndex<- sort(sample(nrow(prepTrain), nrow(prepTrain)*.8))
+
+train <- prepTrain[trainIndex, ]
+test <- prepTrain[-trainIndex, ]
+
+
+```
+
+## Model 1: Poisson
+
+```{r}
+poiss1 <- glm(TARGET ~ FixedAcidity + VolatileAcidity + CitricAcid + ResidualSugar + 
+                Chlorides + FreeSulfurDioxide + TotalSulfurDioxide + Density +
+                pH + Sulphates + Alcohol + 
+                as.factor(LabelAppeal) +
+                as.factor(AcidIndex) +
+                as.factor(STARS),
+              data=train, 
+              family=poisson)
+summary(poiss1)
+plot(poiss1)
+```
+
+```{r}
+poiss2 <- glm(TARGET ~ 
+                as.factor(LabelAppeal) +
+                as.factor(AcidIndex) +
+                as.factor(STARS),
+              data=train, 
+              family=poisson)
+summary(poiss2)
+plot(poiss2)
+```
+
+```{r}
+negative_binom <- glm(TARGET ~ 
+                as.factor(LabelAppeal) +
+                as.factor(AcidIndex) +
+                as.factor(STARS),
+              data=train, 
+              family = negative.binomial(theta = 1))
+summary(negative_binom)
+plot(negative_binom)
+```
+
+```{r}
+lm1 <- lm(TARGET ~ 
+                as.factor(LabelAppeal) +
+                as.factor(AcidIndex) +
+                as.factor(STARS),
+              data=train)
+summary(lm1)
+plot(lm1)
+```
+
+```{r}
+lm2 <- lm(TARGET ~ ., data=train)
+summary(lm2)
+plot(lm2)
+```
+
+
